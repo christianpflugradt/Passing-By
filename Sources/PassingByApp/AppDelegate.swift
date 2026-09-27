@@ -275,6 +275,10 @@ private enum Destination: Hashable {
 
 @main struct PassingByApp: App {
     @StateObject private var startup = Startup()
+    private var shortcutNotes: [Note] {
+        guard let state = startup.state, !state.isLocked else { return [] }
+        return Array(state.notes.prefix(6))
+    }
     var body: some Scene {
         Window("Passing By", id: "main") { StartupView(startup: startup) }
             .defaultSize(width: 1060, height: 700)
@@ -293,12 +297,9 @@ private enum Destination: Hashable {
                     Button("Dashboard") { startup.state?.destination = .dashboard }.keyboardShortcut("1").disabled(startup.state?.isLocked ?? true)
                     Button("To-dos") { startup.state?.destination = .tasks }.keyboardShortcut("2").disabled(startup.state?.isLocked ?? true)
                     Button("Appointments") { startup.state?.destination = .appointments }.keyboardShortcut("3").disabled(startup.state?.isLocked ?? true)
-                    ForEach(0..<6, id: \.self) { index in
-                        Button("Note \(index + 1)") {
-                            if let notes = startup.state?.notes, notes.indices.contains(index) { startup.state?.destination = .note(notes[index].id) }
-                        }
+                    ForEach(Array(shortcutNotes.enumerated()), id: \.element.id) { index, note in
+                        Button(note.title.isEmpty ? "Untitled Note" : note.title) { startup.state?.destination = .note(note.id) }
                         .keyboardShortcut(KeyEquivalent(Character(String(index + 4))))
-                        .disabled(startup.state?.isLocked ?? true)
                     }
                     Button("Help") { startup.state?.destination = .help }.keyboardShortcut("0").disabled(startup.state?.isLocked ?? true)
                 }
