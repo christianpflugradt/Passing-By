@@ -35,6 +35,12 @@ Allowed scopes: `app`, `ui`, `notes`, `todos`, `appointments`, `settings`, `pers
 
 Examples: `build(build): assemble local app`, `fix(ui): correct sidebar alignment`, `docs(docs): clarify setup`.
 
+## Releases
+
+Releases use Semantic Release and SemVer. Run `mise run release` to start the manual GitHub workflow; Conventional Commits determine the next version. The workflow creates a Git tag and GitHub Release after the build and tests pass.
+
+The local build copies `Resources/Info.plist`, where `CFBundleShortVersionString` is `1.0` and `CFBundleVersion` is `1`. Package 5 must set these values in the published bundle from the release version and build metadata.
+
 ## Data and privacy
 
 The workspace is saved automatically at `~/Library/Application Support/Passing by/workspace.json`. On each subsequent save, the last readable version is copied to `workspace.json.backup`.

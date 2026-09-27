@@ -18,6 +18,7 @@ xcuserdata/
 *.zip
 /dist/
 /release/
+/node_modules/
 
 # Local runtime data, logs, and temporary files
 /workspace.json

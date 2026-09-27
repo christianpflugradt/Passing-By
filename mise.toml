@@ -1,3 +1,6 @@
+[tools]
+node = "24.21.0"
+
 [tasks.build]
 description = "Build a local macOS app bundle"
 run = "./Scripts/build-release.sh"
