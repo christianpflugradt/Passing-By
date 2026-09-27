@@ -15,9 +15,11 @@
       }
     ],
     "@semantic-release/release-notes-generator",
+    ["@semantic-release/exec", { "prepareCmd": "RELEASE_VERSION=${nextRelease.version} mise run package" }],
     [
       "@semantic-release/github",
       {
+        "assets": ["build/Passing-By-*.zip"],
         "successCommentCondition": false,
         "failCommentCondition": false,
         "releasedLabels": false

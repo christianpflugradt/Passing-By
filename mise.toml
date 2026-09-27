@@ -9,6 +9,10 @@ run = "./Scripts/build-release.sh"
 description = "Run the Swift unit tests"
 run = "swift run PassingByTests"
 
+[tasks.package]
+description = "Build and ZIP a versioned macOS release app (requires RELEASE_VERSION)"
+run = "./Scripts/package-release.sh"
+
 [tasks.release]
 description = "Trigger the manual GitHub release workflow"
 tools.gh = "2.101.0"
