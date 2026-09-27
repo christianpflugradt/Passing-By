@@ -273,6 +273,33 @@ private enum Destination: Hashable {
     }
 }
 
+private struct AppShortcut {
+    let key: KeyEquivalent
+    let modifiers: EventModifiers
+    let display: String
+    let description: String
+
+    static let dashboard = Self(key: "1", modifiers: .command, display: "⌘1", description: "Dashboard")
+    static let tasks = Self(key: "2", modifiers: .command, display: "⌘2", description: "To-dos")
+    static let appointments = Self(key: "3", modifiers: .command, display: "⌘3", description: "Appointments")
+    static let help = Self(key: "0", modifiers: .command, display: "⌘0", description: "Help")
+    static let settings = Self(key: ",", modifiers: .command, display: "⌘,", description: "Settings")
+    static let newItem = Self(key: "n", modifiers: .command, display: "⌘N", description: "New item for the current view")
+    static let newNote = Self(key: "n", modifiers: [.command, .shift], display: "⇧⌘N", description: "New Note")
+    static let noteTitle = Self(key: "t", modifiers: [.command, .shift], display: "⇧⌘T", description: "Focus Note Title")
+    static let delete = Self(key: .delete, modifiers: .command, display: "⌘⌫", description: "Delete current or selected item")
+    static let lock = Self(key: "l", modifiers: [.command, .shift], display: "⇧⌘L", description: "Lock Passing By (when enabled)")
+    static let find = Self(key: "f", modifiers: .command, display: "⌘F", description: "Find in open Note")
+    static let findNext = Self(key: "g", modifiers: .command, display: "⌘G", description: "Find next")
+    static let findPrevious = Self(key: "g", modifiers: [.command, .shift], display: "⇧⌘G", description: "Find previous")
+
+    static func note(_ index: Int, title: String) -> Self {
+        let number = index + 4
+        return Self(key: KeyEquivalent(Character(String(number))), modifiers: .command,
+                    display: "⌘\(number)", description: title.isEmpty ? "Untitled Note" : title)
+    }
+}
+
 @main struct PassingByApp: App {
     @StateObject private var startup = Startup()
     private var shortcutNotes: [Note] {
@@ -287,35 +314,39 @@ private enum Destination: Hashable {
                     Button("About Passing By") { showAboutPanel() }
                 }
                 CommandGroup(replacing: .newItem) {
-                    Button("New Item") { startup.state?.createContextualItem() }.keyboardShortcut("n").disabled(startup.state?.isLocked ?? true)
-                    Button("New Note") { startup.state?.createNote() }.keyboardShortcut("n", modifiers: [.command, .shift]).disabled(startup.state?.isLocked ?? true)
+                    Button("New Item") { startup.state?.createContextualItem() }.keyboardShortcut(AppShortcut.newItem.key, modifiers: AppShortcut.newItem.modifiers).disabled(startup.state?.isLocked ?? true)
+                    Button("New Note") { startup.state?.createNote() }.keyboardShortcut(AppShortcut.newNote.key, modifiers: AppShortcut.newNote.modifiers).disabled(startup.state?.isLocked ?? true)
                 }
                 CommandGroup(replacing: .appSettings) {
-                    Button("Settings") { startup.state?.destination = .settings }.keyboardShortcut(",").disabled(startup.state?.isLocked ?? true)
+                    Button("Settings") { startup.state?.destination = .settings }.keyboardShortcut(AppShortcut.settings.key, modifiers: AppShortcut.settings.modifiers).disabled(startup.state?.isLocked ?? true)
                 }
                 CommandMenu("Navigate") {
-                    Button("Dashboard") { startup.state?.destination = .dashboard }.keyboardShortcut("1").disabled(startup.state?.isLocked ?? true)
-                    Button("To-dos") { startup.state?.destination = .tasks }.keyboardShortcut("2").disabled(startup.state?.isLocked ?? true)
-                    Button("Appointments") { startup.state?.destination = .appointments }.keyboardShortcut("3").disabled(startup.state?.isLocked ?? true)
+                    Button("Dashboard") { startup.state?.destination = .dashboard }.keyboardShortcut(AppShortcut.dashboard.key, modifiers: AppShortcut.dashboard.modifiers).disabled(startup.state?.isLocked ?? true)
+                    Button("To-dos") { startup.state?.destination = .tasks }.keyboardShortcut(AppShortcut.tasks.key, modifiers: AppShortcut.tasks.modifiers).disabled(startup.state?.isLocked ?? true)
+                    Button("Appointments") { startup.state?.destination = .appointments }.keyboardShortcut(AppShortcut.appointments.key, modifiers: AppShortcut.appointments.modifiers).disabled(startup.state?.isLocked ?? true)
                     ForEach(Array(shortcutNotes.enumerated()), id: \.element.id) { index, note in
                         Button(note.title.isEmpty ? "Untitled Note" : note.title) { startup.state?.destination = .note(note.id) }
-                        .keyboardShortcut(KeyEquivalent(Character(String(index + 4))))
+                        .keyboardShortcut(AppShortcut.note(index, title: note.title).key, modifiers: AppShortcut.note(index, title: note.title).modifiers)
                     }
-                    Button("Help") { startup.state?.destination = .help }.keyboardShortcut("0").disabled(startup.state?.isLocked ?? true)
+                }
+                CommandGroup(replacing: .help) {
+                    Button("Passing By Help") { startup.state?.destination = .help }
+                        .keyboardShortcut(AppShortcut.help.key, modifiers: AppShortcut.help.modifiers)
+                        .disabled(startup.state?.isLocked ?? true)
                 }
                 CommandMenu("Item") {
-                    Button("Focus Note Title") { startup.state?.focusNoteTitle() }.keyboardShortcut("t", modifiers: [.command, .shift]).disabled(startup.state?.isLocked ?? true)
-                    Button("Delete") { startup.state?.deleteCurrentItem() }.keyboardShortcut(.delete).disabled(startup.state?.isLocked ?? true)
+                    Button("Focus Note Title") { startup.state?.focusNoteTitle() }.keyboardShortcut(AppShortcut.noteTitle.key, modifiers: AppShortcut.noteTitle.modifiers).disabled(startup.state?.isLocked ?? true)
+                    Button("Delete") { startup.state?.deleteCurrentItem() }.keyboardShortcut(AppShortcut.delete.key, modifiers: AppShortcut.delete.modifiers).disabled(startup.state?.isLocked ?? true)
                     Divider()
                     Button("Lock Passing By") { startup.state?.lockNow() }
-                        .keyboardShortcut("l", modifiers: [.command, .shift])
+                        .keyboardShortcut(AppShortcut.lock.key, modifiers: AppShortcut.lock.modifiers)
                         .disabled(!(startup.state?.workspace.settings.appLockEnabled ?? false) || (startup.state?.isLocked ?? true))
                 }
                 CommandGroup(after: .textEditing) {
                     Divider()
-                    Button("Find…") { performFindAction(1) }.keyboardShortcut("f").disabled(startup.state?.isLocked ?? true)
-                    Button("Find Next") { performFindAction(2) }.keyboardShortcut("g").disabled(startup.state?.isLocked ?? true)
-                    Button("Find Previous") { performFindAction(3) }.keyboardShortcut("g", modifiers: [.command, .shift]).disabled(startup.state?.isLocked ?? true)
+                    Button("Find…") { performFindAction(1) }.keyboardShortcut(AppShortcut.find.key, modifiers: AppShortcut.find.modifiers).disabled(startup.state?.isLocked ?? true)
+                    Button("Find Next") { performFindAction(2) }.keyboardShortcut(AppShortcut.findNext.key, modifiers: AppShortcut.findNext.modifiers).disabled(startup.state?.isLocked ?? true)
+                    Button("Find Previous") { performFindAction(3) }.keyboardShortcut(AppShortcut.findPrevious.key, modifiers: AppShortcut.findPrevious.modifiers).disabled(startup.state?.isLocked ?? true)
                 }
             }
     }
@@ -414,7 +445,7 @@ private struct WorkspaceView: View {
                 case .tasks: TasksView(state: state)
                 case .appointments: AppointmentsView(state: state)
                 case .note(let id): NoteView(state: state, id: id)
-                case .help: HelpView()
+                case .help: HelpView(notes: state.notes)
                 case .settings: SettingsView(state: state)
                 }
             }
@@ -814,32 +845,67 @@ private struct NoteView: View {
 }
 
 private struct HelpView: View {
-    private let shortcuts: [(String, String)] = [
-        ("⌘1", "Dashboard"), ("⌘2", "To-dos"), ("⌘3", "Appointments"),
-        ("⌘4–9", "Notes 1–6 in sidebar order"), ("⌘0", "Help"), ("⌘,", "Settings"),
-        ("⌘N", "New item for the current view"), ("⇧⌘N", "New Note"),
-        ("⇧⌘T", "Focus Note Title"), ("⌘⌫", "Delete selected item"),
-        ("⌘Z / ⇧⌘Z", "Undo / Redo"), ("⌘F", "Find in Note"),
-        ("⌘G / ⇧⌘G", "Find Next / Previous"),
-        ("⇧⌘L", "Lock Passing By (when App Lock is enabled)")
-    ]
+    let notes: [Note]
+    private var shortcuts: [AppShortcut] {
+        [AppShortcut.dashboard, .tasks, .appointments] +
+        Array(notes.prefix(6).enumerated()).map { AppShortcut.note($0.offset, title: $0.element.title) } +
+        [.help, .settings, .newItem, .newNote, .noteTitle, .delete, .lock, .find, .findNext, .findPrevious]
+    }
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
+            VStack(alignment: .leading, spacing: 24) {
                 Text("Help").font(.largeTitle.weight(.semibold))
-                Text("Keyboard Shortcuts").font(.title2.weight(.semibold))
-                Grid(alignment: .leading, horizontalSpacing: 32, verticalSpacing: 13) {
-                    ForEach(shortcuts, id: \.0) { shortcut in
+                Text("Passing By keeps everyday notes, to-dos, and appointments close at hand. Your information stays locally on this Mac, and changes are saved automatically.")
+                section("Categories", "Create Categories in Settings to organize To-dos, Appointments, and Notes. Work, Personal, and Sports are examples you might create. A Default Category applies to new items; a Scheduled Default can use another Category on selected weekdays and times.")
+                section("To-dos", "Create To-dos and assign them to Categories. Mark one complete to remove it from the open list. Turn on Show Completed To-dos to see completed items and restore one if you checked it off by mistake.")
+                section("Appointments", "Create Appointments and assign them to Categories. Upcoming Appointments appear on the Dashboard alongside open To-dos. The Appointments view can also show past items.")
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Bulk Import").font(.title2.weight(.semibold))
+                    Text("Settings → Appointments → Bulk Import adds multiple Appointments at once, such as a training plan, schedule, or list of planned dates. Use one tab-separated line per Appointment:")
+                    Text("DD.MM.YYYY<TAB>Title<TAB>Description")
+                        .font(.system(.callout, design: .monospaced))
+                        .textSelection(.enabled)
+                    Text("Description is optional.").foregroundStyle(.secondary)
+                }
+                section("Notes", "Create individual Notes and assign them to Categories. Edit Markdown source with syntax highlighting, optional line numbers, word and character counts, Find, Undo and Redo, spell checking, and space-based indentation. Standard Cut, Copy, Paste, and Select All also work.")
+                section("Dashboard", "See a compact view of open To-dos and upcoming Appointments. The Category filter narrows the view to one context.")
+                section("App Lock", "Enable App Lock in Settings to prevent casual access through Passing By. Unlock with macOS authentication, including Touch ID when available. You can also set the app to lock after it becomes inactive. App Lock does not encrypt the workspace file on disk.")
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Keyboard Shortcuts").font(.title2.weight(.semibold))
+                    Text("⌘N creates a To-do or Appointment in those views, and a Note elsewhere. Note shortcuts follow the first six Notes currently shown in the sidebar.")
+                        .foregroundStyle(.secondary)
+                    Grid(alignment: .leading, horizontalSpacing: 30, verticalSpacing: 7) {
+                        ForEach(shortcuts.indices, id: \.self) { index in
+                            let shortcut = shortcuts[index]
+                            GridRow {
+                                Text(shortcut.display)
+                                    .font(.system(.callout, design: .monospaced))
+                                    .foregroundStyle(.secondary)
+                                    .frame(minWidth: 80, alignment: .leading)
+                                Text(shortcut.description)
+                            }
+                        }
                         GridRow {
-                            Text(shortcut.0).font(.system(.body, design: .monospaced)).foregroundStyle(.secondary)
-                            Text(shortcut.1)
+                            Text("⌘Z / ⇧⌘Z").font(.system(.callout, design: .monospaced)).foregroundStyle(.secondary)
+                            Text("Undo / Redo in the Note editor")
                         }
                     }
                 }
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("More").font(.title2.weight(.semibold))
+                    Text("Passing By is open source. Visit the project on GitHub for source code, issues, and further information.")
+                    Link("Open GitHub Repository", destination: URL(string: "https://github.com/christianpflugradt/PassingBy")!)
+                }
             }
-            .frame(maxWidth: 700, alignment: .leading)
+            .frame(maxWidth: 680, alignment: .leading)
             .padding(.horizontal, 34).padding(.vertical, 28)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .center)
+        }
+    }
+    private func section(_ heading: String, _ copy: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(heading).font(.title2.weight(.semibold))
+            Text(copy)
         }
     }
 }
