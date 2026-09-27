@@ -20,8 +20,6 @@ jobs:
           cache: false
       - name: Install release dependencies
         run: npm ci
-      - name: Build app
-        run: mise run build
       - name: Run unit tests
         run: mise run test
       - name: Publish release

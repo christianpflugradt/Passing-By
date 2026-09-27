@@ -25,7 +25,7 @@ mise run build
 mise run test
 ```
 
-`mise run build` creates `build/Passing By.app`. Open that bundle from Finder to run it. The build is ad hoc signed and uses the latest reachable release tag for its version when one exists.
+`mise run build` creates `build/Passing By.app`. Open that bundle from Finder to run it. The build is ad hoc signed. Local builds without `RELEASE_VERSION` display `0.0.0`.
 
 After cloning, run `sh Scripts/setup-git-hooks.sh` to enable the repository commit-message hook. Commit subjects use `type(scope): description` with a non-empty description.
 
@@ -39,7 +39,7 @@ Examples: `build(build): assemble local app`, `fix(ui): correct sidebar alignmen
 
 Download macOS builds from [GitHub Releases](https://github.com/christianpflugradt/PassingBy/releases). Each `Passing-By-<version>.zip` contains `Passing By.app`. The app is ad hoc signed and is not notarized.
 
-Releases use Semantic Release and SemVer. Run `mise run release` to start the manual GitHub workflow; Conventional Commits determine the next version. After the build and tests pass, Semantic Release supplies that version to the app bundle and ZIP, creates the `v<version>` tag, and publishes the GitHub Release with the ZIP attached. For local packaging checks, run `RELEASE_VERSION=1.2.3 mise run package` with a test version.
+Releases use Semantic Release and SemVer. Run `mise run release` to start the manual GitHub workflow; Conventional Commits determine the next version. After tests pass, Semantic Release passes that version directly to the release build and packaging steps, creates the `v<version>` tag, and publishes the GitHub Release with the ZIP attached. For local packaging checks, run `RELEASE_VERSION=1.2.3 mise run build && RELEASE_VERSION=1.2.3 mise run package` with a test version.
 
 ## Data and privacy
 

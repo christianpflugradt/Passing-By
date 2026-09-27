@@ -15,7 +15,7 @@
       }
     ],
     "@semantic-release/release-notes-generator",
-    ["@semantic-release/exec", { "prepareCmd": "RELEASE_VERSION=${nextRelease.version} mise run package" }],
+    ["@semantic-release/exec", { "prepareCmd": "RELEASE_VERSION=${nextRelease.version} mise run build && RELEASE_VERSION=${nextRelease.version} mise run package" }],
     [
       "@semantic-release/github",
       {

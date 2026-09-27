@@ -9,7 +9,6 @@ fi
 
 root="${0:A:h:h}"
 cd "$root"
-mise run build
 
 app="$root/build/Passing By.app"
 archive="$root/build/Passing-By-$RELEASE_VERSION.zip"
