@@ -14,12 +14,15 @@ mkdir -p "$staged_app/Contents/MacOS" "$staged_app/Contents/Resources"
 cp "$bin_path/PassingByApp" "$staged_app/Contents/MacOS/PassingBy"
 cp "$root/Resources/Info.plist" "$staged_app/Contents/Info.plist"
 if [[ -n "${RELEASE_VERSION:-}" ]]; then
+  # Release builds keep the production identity; local builds use the development identity from Info.plist.
   if [[ ! "$RELEASE_VERSION" =~ '^[1-9][0-9]*\.[0-9]+\.[0-9]+$' ]]; then
     print -u2 "RELEASE_VERSION must be a numeric major.minor.patch version"
     exit 1
   fi
   /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $RELEASE_VERSION" "$staged_app/Contents/Info.plist"
   /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $RELEASE_VERSION" "$staged_app/Contents/Info.plist"
+  /usr/libexec/PlistBuddy -c 'Set :CFBundleIdentifier local.passingby.app' "$staged_app/Contents/Info.plist"
+  /usr/libexec/PlistBuddy -c 'Set :CFBundleName Passing By' "$staged_app/Contents/Info.plist"
 fi
 
 icon_tmp="$(mktemp -d)"

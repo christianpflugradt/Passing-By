@@ -374,7 +374,7 @@ private struct AppShortcut {
             .paragraphStyle: paragraph
         ])
     NSApp.orderFrontStandardAboutPanel(options: [
-        .applicationVersion: "Version \(version)",
+        .applicationVersion: version == "0.0.0" ? "Development build" : "Version \(version)",
         .version: build == version ? "" : build,
         .credits: credits
     ])
