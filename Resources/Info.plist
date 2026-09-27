@@ -7,8 +7,9 @@
   <key>CFBundleIconFile</key><string>PassingBy.icns</string>
   <key>CFBundleName</key><string>Passing By</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>1.0</string>
-  <key>CFBundleVersion</key><string>1</string>
+  <key>CFBundleShortVersionString</key><string>0.0.0</string>
+  <key>CFBundleVersion</key><string>0.0.0</string>
+  <key>NSHumanReadableCopyright</key><string>Copyright © 2026 Christian Pflugradt. All rights reserved.</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSPrincipalClass</key><string>NSApplication</string>
 </dict></plist>

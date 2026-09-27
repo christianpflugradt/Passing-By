@@ -279,6 +279,9 @@ private enum Destination: Hashable {
         Window("Passing By", id: "main") { StartupView(startup: startup) }
             .defaultSize(width: 1060, height: 700)
             .commands {
+                CommandGroup(replacing: .appInfo) {
+                    Button("About Passing By") { showAboutPanel() }
+                }
                 CommandGroup(replacing: .newItem) {
                     Button("New Item") { startup.state?.createContextualItem() }.keyboardShortcut("n").disabled(startup.state?.isLocked ?? true)
                     Button("New Note") { startup.state?.createNote() }.keyboardShortcut("n", modifiers: [.command, .shift]).disabled(startup.state?.isLocked ?? true)
@@ -315,6 +318,28 @@ private enum Destination: Hashable {
                 }
             }
     }
+}
+
+@MainActor private func showAboutPanel() {
+    let bundle = Bundle.main
+    let version = bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+    let build = bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""
+    let paragraph = NSMutableParagraphStyle()
+    paragraph.alignment = .center
+    let credits = NSAttributedString(string: """
+        A lightweight, local-first macOS app for notes, to-dos, and appointments.
+
+        Created by Christian Pflugradt
+        """, attributes: [
+            .font: NSFont.systemFont(ofSize: 13),
+            .foregroundColor: NSColor.secondaryLabelColor,
+            .paragraphStyle: paragraph
+        ])
+    NSApp.orderFrontStandardAboutPanel(options: [
+        .applicationVersion: "Version \(version)",
+        .version: build == version ? "" : build,
+        .credits: credits
+    ])
 }
 
 @MainActor private func performFindAction(_ tag: Int) {
