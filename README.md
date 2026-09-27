@@ -25,7 +25,7 @@ mise run build
 mise run test
 ```
 
-`mise run build` creates `build/Passing By.app`. Open that bundle from Finder to run it. The build is ad hoc signed.
+`mise run build` creates `build/Passing By.app`. Open that bundle from Finder to run it. The build is ad hoc signed and uses the latest reachable release tag for its version when one exists.
 
 After cloning, run `sh Scripts/setup-git-hooks.sh` to enable the repository commit-message hook. Commit subjects use `type(scope): description` with a non-empty description.
 
