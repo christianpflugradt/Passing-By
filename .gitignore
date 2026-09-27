@@ -1,0 +1,42 @@
+# macOS
+.DS_Store
+._*
+
+# Swift Package Manager and local builds
+.build/
+/build/
+/DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xccheckout
+*.xcscmblueprint
+
+# Generated packages and archives
+*.app/
+*.xcarchive/
+*.dmg
+*.zip
+/dist/
+/release/
+
+# Local runtime data, logs, and temporary files
+/workspace.json
+/workspace.json.backup
+*.log
+*.tmp
+*.swp
+*.swo
+*~
+
+# Local environment and signing material
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p8
+*.p12
+*.cer
+*.crt
+*.mobileprovision
+*.provisionprofile

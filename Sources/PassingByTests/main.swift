@@ -1,0 +1,491 @@
+import Foundation
+import PassingByCore
+
+func expect(_ condition: @autoclosure () -> Bool, _ message: String) {
+    if !condition() { fputs("FAIL: \(message)\n", stderr); exit(1) }
+}
+
+func testDeletingLabelUnlabelsEveryItemAndResetsFilter() {
+        let label = Label(name: "Private")
+        let note = Note(title: "N", labelID: label.id)
+        let task = Task(title: "T", labelID: label.id)
+        let item = DateItem(title: "D", date: Date(), labelID: label.id)
+        var workspace = Workspace(labels: [label], notes: [note], tasks: [task], dates: [item], settings: AppSettings(labelContext: .label(label.id)))
+        workspace.deleteLabel(label.id)
+        expect(workspace.labels.isEmpty, "label is deleted")
+        expect(workspace.notes[0].labelID == nil && workspace.tasks[0].labelID == nil && workspace.dates[0].labelID == nil, "items become unlabelled")
+        expect(workspace.settings.labelContext == .all, "deleted filter resets")
+}
+
+func testRetentionNeverDeletesOpenTasksOrFutureDates() {
+        let calendar = Calendar(identifier: .gregorian)
+        let now = Date(timeIntervalSinceReferenceDate: 10_000_000)
+        let open = Task(title: "Open")
+        let future = DateItem(title: "Future", date: calendar.date(byAdding: .day, value: 10, to: now)!)
+        var workspace = Workspace(tasks: [open], dates: [future])
+        workspace.purgeExpired(now: now, calendar: calendar)
+        expect(workspace.tasks.map(\.id) == [open.id] && workspace.dates.map(\.id) == [future.id], "active content survives retention")
+}
+
+func testRetentionRemovesOnlyExpiredCompletedAndPassedItems() {
+        let calendar = Calendar(identifier: .gregorian)
+        let now = Date(timeIntervalSinceReferenceDate: 20_000_000)
+        let oldTask = Task(title: "old", completedAt: calendar.date(byAdding: .day, value: -31, to: now))
+        let recentTask = Task(title: "recent", completedAt: calendar.date(byAdding: .day, value: -2, to: now))
+        let oldDate = DateItem(title: "old", date: calendar.date(byAdding: .day, value: -31, to: now)!)
+        var workspace = Workspace(tasks: [oldTask, recentTask], dates: [oldDate])
+        workspace.purgeExpired(now: now, calendar: calendar)
+        expect(workspace.tasks.map(\.id) == [recentTask.id] && workspace.dates.isEmpty, "only expired inactive content is removed")
+}
+
+func testGlobalContextMatchesAllAndOneLabel() {
+        let label = Label(name: "Work")
+        let workspace = Workspace(labels: [label])
+        expect(workspace.matches(nil, context: .all) && workspace.matches(label.id, context: .all), "All includes categorized and uncategorized items")
+        expect(!workspace.matches(nil, context: .label(label.id)) && workspace.matches(label.id, context: .label(label.id)), "a category excludes uncategorized items")
+        expect(workspace.matches(label.id, context: .unlabelled), "legacy uncategorized filter no longer hides categorized items")
+}
+
+func testPersistenceRoundTrip() throws {
+        let url = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("PassingByTests-\(UUID().uuidString).json")
+        let persistence = WorkspacePersistence(url: url)
+        let workspace = Workspace(notes: [Note(title: "Persisted", contentMarkdown: "# Hi")])
+        try persistence.save(workspace)
+        let loaded = try persistence.load()
+        expect(loaded == workspace, "persistence round trip")
+        try? FileManager.default.removeItem(at: url)
+}
+
+func testNoteIconPersistenceAndLegacyFallback() throws {
+    let note = Note(title: "Icon", iconName: "lightbulb")
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let persistence = WorkspacePersistence(url: directory.appendingPathComponent("workspace.json"))
+    try persistence.save(Workspace(notes: [note]))
+    let saved = try persistence.load()
+    expect(saved.notes[0].iconName == "lightbulb", "selected Note icon survives reload")
+    var legacy = try JSONSerialization.jsonObject(with: Data(contentsOf: persistence.url)) as! [String: Any]
+    var notes = legacy["notes"] as! [[String: Any]]
+    notes[0].removeValue(forKey: "iconName")
+    legacy["notes"] = notes
+    try JSONSerialization.data(withJSONObject: legacy).write(to: persistence.url)
+    let loadedLegacy = try persistence.load()
+    expect(loadedLegacy.notes[0].iconName == NoteIcon.defaultName, "old Note without icon gets the default")
+    notes[0]["iconName"] = "unknown.symbol"
+    legacy["notes"] = notes
+    try JSONSerialization.data(withJSONObject: legacy).write(to: persistence.url)
+    let loadedUnknown = try persistence.load()
+    expect(loadedUnknown.notes[0].iconName == NoteIcon.defaultName, "unknown icon falls back safely")
+}
+
+func testMissingFileIsOnlyEmptyWorkspaceCase() throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+    let url = directory.appendingPathComponent("workspace.json")
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let persistence = WorkspacePersistence(url: url)
+    let empty = try persistence.load()
+    expect(empty == Workspace(), "missing file starts empty")
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    try Data("{broken".utf8).write(to: url)
+    do {
+        _ = try persistence.load()
+        expect(false, "corrupt data must throw")
+    } catch { }
+    do {
+        try persistence.save(Workspace(notes: [Note(title: "New")]))
+        expect(false, "corrupt source must not be overwritten")
+    } catch { }
+    let original = try String(contentsOf: url, encoding: .utf8)
+    expect(original == "{broken", "corrupt original is preserved")
+}
+
+func testFailedWriteKeepsInMemoryChanges() throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let persistence = WorkspacePersistence(url: directory) // A directory is not a writable workspace file.
+    do {
+        _ = try AppStore(persistence: persistence)
+        expect(false, "unreadable existing path must fail at startup")
+    } catch { }
+    let blocked = directory.appendingPathComponent("read-only", isDirectory: true)
+    try FileManager.default.createDirectory(at: blocked, withIntermediateDirectories: true)
+    try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: blocked.path)
+    defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: blocked.path) }
+    let unwritable = try AppStore(persistence: WorkspacePersistence(url: blocked.appendingPathComponent("workspace.json")))
+    unwritable.change { $0.notes.append(Note(title: "Still in memory")) }
+    expect(unwritable.workspace.notes.count == 1, "failed write retains in-memory edit")
+    expect(unwritable.persistenceError != nil, "failed write is reported")
+    let url = directory.appendingPathComponent("workspace.json")
+    let store = try AppStore(persistence: WorkspacePersistence(url: url))
+    let note = Note(title: "Kept")
+    store.change { $0.notes.append(note) }
+    let saved = try WorkspacePersistence(url: url).load()
+    expect(saved.notes.contains(note), "change is saved synchronously")
+    let backup = url.appendingPathExtension("backup")
+    store.change { $0.notes[0].contentMarkdown = "Edited" }
+    expect(FileManager.default.fileExists(atPath: backup.path), "last good snapshot exists")
+    let prior = try WorkspacePersistence(url: backup).load()
+    expect(prior.notes[0].contentMarkdown == "", "backup holds prior content")
+}
+
+func testStoreEditAndRestoreSurviveReload() throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let persistence = WorkspacePersistence(url: directory.appendingPathComponent("workspace.json"))
+    let store = try AppStore(persistence: persistence)
+    let label = Label(name: "Work")
+    let note = Note(title: "Draft", labelID: label.id)
+    let task = Task(title: "Call", labelID: label.id)
+    store.change { w in w.labels.append(label); w.notes.append(note); w.tasks.append(task); w.settings.labelContext = .label(label.id) }
+    store.change { w in w.notes[0].contentMarkdown = "# Work\n\n```swift\nlet x = 1\n```"; w.tasks[0].completedAt = Date() }
+    store.change { $0.tasks[0].completedAt = nil }
+    let reloaded = try AppStore(persistence: persistence).workspace
+    expect(reloaded.notes[0].contentMarkdown.contains("let x = 1"), "ordinary edits persist through reload")
+    expect(reloaded.tasks[0].completedAt == nil, "restored task stays open")
+    expect(reloaded.settings.labelContext == .label(label.id), "global context persists")
+}
+
+func testDateGroupsAndChronologicalAccess() {
+    let calendar = Calendar(identifier: .gregorian)
+    let now = Date(timeIntervalSinceReferenceDate: 30_000_000)
+    let work = Label(name: "Work")
+    let today = calendar.startOfDay(for: now)
+    let dates = [
+        DateItem(title: "Later", date: calendar.date(byAdding: .day, value: 3, to: today)!, labelID: work.id),
+        DateItem(title: "Soon", date: calendar.date(byAdding: .day, value: 1, to: today)!, labelID: work.id),
+        DateItem(title: "Unlabelled", date: today),
+        DateItem(title: "Past", date: calendar.date(byAdding: .day, value: -1, to: today)!, labelID: work.id)
+    ]
+    let workspace = Workspace(labels: [work], dates: dates, settings: AppSettings(maximumUpcomingDatesPerLabel: 1))
+    let groups = workspace.dateGroups(showPast: false, calendar: calendar, now: now)
+    expect(groups.count == 2, "real groups include labelled and unlabelled Dates")
+    let workGroup = groups.first { $0.name == "Work" }!
+    expect(workGroup.items.map(\.title) == ["Soon"] && workGroup.hiddenUpcomingCount == 1, "group sorts and limits upcoming Dates")
+    expect(workspace.matchingDates(showPast: false, calendar: calendar, now: now).map(\.title) == ["Unlabelled", "Soon", "Later"], "chronological mode exposes all upcoming Dates")
+    let expanded = workspace.dateGroups(showPast: true, expanded: [work.id.uuidString], calendar: calendar, now: now).first { $0.name == "Work" }!
+    expect(expanded.items.map(\.title) == ["Past", "Soon", "Later"], "expansion and past toggle expose all Dates")
+}
+
+func testUpcomingHorizonAndCategoryLimit() {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+    let today = calendar.date(from: DateComponents(year: 2026, month: 9, day: 27))!
+    let training = Label(name: "Training")
+    let other = Label(name: "Other")
+    func item(_ title: String, _ offset: Int, _ label: UUID?) -> DateItem {
+        DateItem(title: title, date: calendar.date(byAdding: .day, value: offset, to: today)!, labelID: label)
+    }
+    let items = [item("Today", 0, training.id), item("Soon", 1, training.id), item("Later", 14, training.id), item("Outside", 15, training.id), item("Other", 2, other.id)]
+    var workspace = Workspace(labels: [training, other], dates: items, settings: AppSettings(maximumUpcomingDatesPerLabel: 2))
+    expect(workspace.settings.upcomingHorizonDays == 14, "default horizon is 14 days")
+    expect(workspace.upcomingDates(calendar: calendar, now: today).map(\.title) == ["Today", "Soon", "Other"], "horizon and category maximum both apply")
+    let groups = workspace.dateGroups(showPast: false, calendar: calendar, now: today)
+    expect(groups.first { $0.name == "Training" }?.hiddenUpcomingCount == 1, "group count includes only in-horizon hidden items")
+    expect(workspace.matchingDates(showPast: false, calendar: calendar, now: today).count == 5, "chronological collection remains complete")
+    workspace.settings.maximumUpcomingDatesPerLabel = 5
+    expect(workspace.upcomingDates(calendar: calendar, now: today).map(\.title) == ["Today", "Soon", "Other", "Later"], "14th day is included and 15th excluded")
+    workspace.settings.upcomingHorizonDays = 1
+    expect(workspace.upcomingDates(calendar: calendar, now: today).map(\.title) == ["Today", "Soon"], "one-day lower boundary applies")
+    workspace.settings.upcomingHorizonDays = 365
+    expect(workspace.upcomingDates(calendar: calendar, now: today).count == 5, "365-day upper boundary applies")
+    workspace.settings.upcomingHorizonDays = 366
+    expect(workspace.settings.upcomingHorizonDays == 14, "invalid in-memory horizon resets safely")
+}
+
+func testTSVImportAndAtomicPersistence() throws {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+    let source = "27.09.2026\tLong Run\t18 km easy\n30.09.2026\tIntervals\t\n03.10.2026\tEasy Run\n\n"
+    let parsed = AppointmentTSVImport(source, calendar: calendar)
+    expect(parsed.canImport && parsed.rows.count == 3 && parsed.issues.isEmpty, "three valid rows and empty lines")
+    expect(parsed.rows.map(\.description) == ["18 km easy", "", ""], "trailing tab and two-column rows have empty descriptions")
+    expect(parsed.rows[0].date == calendar.date(from: DateComponents(year: 2026, month: 9, day: 27)), "imported date is date-only at start of day")
+    let invalid = AppointmentTSVImport("31.02.2027\tBad\t\n1.1.2027\tBad\t\n02.01.2027\t  \t\n02.01.2027\tGood\tDesc\textra\n04.10.2026\tValid\t\n", calendar: calendar)
+    expect(!invalid.canImport && invalid.rows.count == 1 && invalid.issues.map(\.line) == [1, 2, 3, 4], "a valid row cannot bypass other line errors")
+    expect(!AppointmentTSVImport("\n \n").canImport, "empty file cannot import")
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let persistence = WorkspacePersistence(url: directory.appendingPathComponent("workspace.json"))
+    let category = Label(name: "Training")
+    try persistence.save(Workspace(labels: [category]))
+    let store = try AppStore(persistence: persistence)
+    do { try store.importAppointments(invalid, categoryID: category.id); expect(false, "invalid report must fail") } catch { }
+    let afterInvalid = try persistence.load()
+    expect(store.workspace.dates.isEmpty && afterInvalid.dates.isEmpty, "complete validation precedes mutation")
+    try store.importAppointments(parsed, categoryID: category.id)
+    expect(store.workspace.dates.count == 3 && store.workspace.dates.allSatisfy { $0.labelID == category.id }, "one selected Category applies to the batch")
+    let afterImport = try persistence.load()
+    expect(afterImport.dates == store.workspace.dates, "import survives persistence round trip")
+    try store.importAppointments(parsed, categoryID: nil)
+    expect(store.workspace.dates.count == 6 && store.workspace.dates.suffix(3).allSatisfy { $0.labelID == nil }, "Uncategorized import appends without merging")
+    let beforeFailure = store.workspace
+    let backup = persistence.url.appendingPathExtension("backup")
+    try FileManager.default.removeItem(at: backup)
+    try FileManager.default.createDirectory(at: backup, withIntermediateDirectories: true)
+    do { try store.importAppointments(parsed, categoryID: category.id); expect(false, "failed save must throw") } catch { }
+    let afterFailure = try persistence.load()
+    expect(store.workspace == beforeFailure && afterFailure == beforeFailure, "failed import preserves memory and saved workspace")
+}
+
+func testHorizonPersistenceAndMigration() throws {
+    var settings = AppSettings(upcomingHorizonDays: 365)
+    let encoded = try JSONEncoder().encode(settings)
+    let upper = try JSONDecoder().decode(AppSettings.self, from: encoded)
+    expect(upper.upcomingHorizonDays == 365, "custom upper-bound horizon persists")
+    settings.upcomingHorizonDays = 1
+    let lower = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(settings))
+    expect(lower.upcomingHorizonDays == 1, "lower-bound horizon persists")
+    var object = try JSONSerialization.jsonObject(with: encoded) as! [String: Any]
+    object.removeValue(forKey: "upcomingHorizonDays")
+    object["maximumUpcomingDatesPerLabel"] = 7
+    let legacy = try JSONDecoder().decode(AppSettings.self, from: JSONSerialization.data(withJSONObject: object))
+    expect(legacy.upcomingHorizonDays == 14 && legacy.maximumUpcomingDatesPerLabel == 7, "legacy maximum is preserved and horizon defaults")
+    for value in [0, -1, 366] {
+        object["upcomingHorizonDays"] = value
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONSerialization.data(withJSONObject: object))
+        expect(decoded.upcomingHorizonDays == 14, "invalid persisted horizon resets to default")
+    }
+}
+
+func testMarkdownSourceHighlighting() {
+    let source = #"""
+    # Heading 1
+    ## Heading 2
+    ### Heading 3
+    #### Heading 4
+    ##### Heading 5
+    ###### Heading 6
+
+    Normal text
+    **bold** __bold__ *italic* _italic_ ***bold italic*** ___bold italic___ ~~strikethrough~~
+    - unordered list
+    * unordered list
+    + unordered list
+    1. ordered list
+    2. second item
+    - [ ] open task
+    - [x] completed task
+    - [X] completed task
+    > blockquote
+    >> nested blockquote
+    [OpenAI](https://openai.com)
+    <https://openai.com>
+    `inline code`
+    ```text
+    code block
+    multiple lines
+    ```
+    Prose after the fence.
+    ---
+    ***
+    ___
+    Escaped \*not italic\* and \\*also not italic*
+    Some **bold**, *italic*, `code`, and [link](https://example.com) inside ordinary text.
+    """#
+    let parsed = MarkdownHighlight.parse(source)
+    let ns = source as NSString
+    func range(_ text: String, after offset: Int = 0) -> NSRange {
+        ns.range(of: text, options: [], range: NSRange(location: offset, length: ns.length - offset))
+    }
+    func has(_ style: MarkdownHighlight.Style, _ text: String, after offset: Int = 0) -> Bool {
+        parsed.spans.contains { $0.style == style && $0.range == range(text, after: offset) }
+    }
+    for level in 1...6 { expect(has(.heading(level), String(repeating: "#", count: level) + " Heading \(level)"), "heading \(level)") }
+    expect(has(.syntax, "**") && has(.bold, "bold"), "bold markers and content differ")
+    expect(has(.syntax, "__") && parsed.spans.contains { $0.style == .bold && ns.substring(with: $0.range) == "bold" }, "underscore bold")
+    expect(has(.italic, "italic") && has(.syntax, "*", after: range("**bold**").location + 8), "italic markers stay visible")
+    let combination = range("bold italic")
+    expect(parsed.spans.contains { $0.style == .bold && $0.range == combination } && parsed.spans.contains { $0.style == .italic && $0.range == combination }, "triple emphasis has both traits")
+    expect(has(.strike, "strikethrough"), "strikethrough content")
+    for marker in ["- ", "* ", "+ ", "1. ", "2. ", "- [ ] ", "- [x] ", "- [X] ", "> ", ">> "] {
+        expect(parsed.spans.contains { $0.style == .syntax && ns.substring(with: $0.range) == marker }, "structural marker \(marker)")
+    }
+    expect(has(.linkText, "OpenAI") && has(.linkURL, "https://openai.com") && parsed.links.count == 3, "links retain visible text and URL")
+    expect(has(.code, "inline code") && has(.code, "code block"), "inline and fenced code")
+    expect(!parsed.spans.contains { $0.style == .code && NSLocationInRange(range("Prose after").location, $0.range) }, "closing fence ends code")
+    expect(!parsed.spans.contains { $0.style == .italic && NSLocationInRange(range("not italic").location, $0.range) }, "escaped marker is not italic")
+    expect(parsed.spans.contains { $0.style == .linkText && ns.substring(with: $0.range) == "link" }, "mixed inline styling")
+    expect(String(decoding: source.utf16, as: UTF16.self) == source, "parsing never changes source")
+    for span in parsed.spans { expect(span.range.location >= 0 && NSMaxRange(span.range) <= ns.length, "all styles stay within source offsets") }
+}
+
+func testIncompleteMarkdownWhileTyping() {
+    for source in ["", "*", "**unfinished", "[link](", "<https://", "`code", "```swift\nunfinished", "\\*escaped*", "- ["] {
+        let result = MarkdownHighlight.parse(source)
+        let length = (source as NSString).length
+        expect(result.spans.allSatisfy { NSMaxRange($0.range) <= length }, "incomplete syntax stays in bounds")
+    }
+    let unclosed = MarkdownHighlight.parse("```\ncode\nmore")
+    expect(unclosed.spans.contains { $0.style == .code }, "unclosed fence highlights remaining source")
+    let crossing = MarkdownHighlight.parse("*before `code` after* and *good*")
+    let crossingSource = "*before `code` after* and *good*" as NSString
+    expect(!crossing.spans.contains { $0.style == .italic && crossingSource.substring(with: $0.range).contains("code") }, "emphasis does not cross protected code")
+    expect(crossing.spans.contains { $0.style == .italic && crossingSource.substring(with: $0.range) == "good" }, "formatting after protected code still works")
+    let invalid = MarkdownHighlight.parse("[text](not-a-url) <javascript:alert(1)>")
+    expect(invalid.links.isEmpty, "only valid web links open")
+    expect(invalid.spans.contains { $0.style == .linkText && ("[text](not-a-url) <javascript:alert(1)>" as NSString).substring(with: $0.range) == "text" }, "relative links still receive source highlighting")
+    let unicode = "🙂 **bold** [link](https://example.com)"
+    let unicodeResult = MarkdownHighlight.parse(unicode)
+    let unicodeSource = unicode as NSString
+    expect(unicodeResult.spans.contains { $0.style == .bold && unicodeSource.substring(with: $0.range) == "bold" }, "style offsets use UTF-16 after emoji")
+    expect(unicodeResult.links.count == 1 && unicodeSource.substring(with: unicodeResult.links[0].range) == "https://example.com", "link offsets use UTF-16 after emoji")
+}
+
+func testNoteEditorStatus() {
+    let empty = NoteEditorStatus(source: "", caretUTF16Offset: 0)
+    expect(empty.line == 1 && empty.column == 1 && empty.words == 0 && empty.characters == 0, "empty Note status")
+
+    let source = "# Heading\n**hello** world\n🙂 café\n"
+    let ns = source as NSString
+    let second = ns.range(of: "world")
+    let middle = NoteEditorStatus(source: source, caretUTF16Offset: second.location)
+    expect(middle.line == 2 && middle.column == 11, "logical line and one-based column")
+    expect(middle.words == 4 && middle.characters == source.count, "native words and literal Markdown characters")
+    let emoji = ns.range(of: "🙂")
+    let afterEmoji = NoteEditorStatus(source: source, caretUTF16Offset: NSMaxRange(emoji))
+    expect(afterEmoji.line == 3 && afterEmoji.column == 2, "emoji occupies one displayed column")
+    let final = NoteEditorStatus(source: source, caretUTF16Offset: ns.length)
+    expect(final.line == 4 && final.column == 1, "trailing newline opens an empty logical line")
+
+    let wrapped = String(repeating: "long ", count: 80)
+    expect(NoteEditorStatus(source: wrapped, caretUTF16Offset: (wrapped as NSString).length).line == 1,
+           "visual wrapping does not add logical lines")
+    let inserted = NoteEditorStatus(source: "one\ntwo\nthree", caretUTF16Offset: ("one\ntwo\nthree" as NSString).length)
+    let deleted = NoteEditorStatus(source: "one\nthree", caretUTF16Offset: ("one\nthree" as NSString).length)
+    expect(inserted.line == 3 && deleted.line == 2, "line insertion and deletion update numbering")
+    expect(NoteEditorStatus(source: "**hello** \n", caretUTF16Offset: 0).characters == 11,
+           "Markdown markers and whitespace count as source characters")
+}
+
+func testDefaultCategoryAndScheduleAtCreation() {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+    func date(_ day: Int, _ hour: Int, _ minute: Int = 0) -> Date {
+        calendar.date(from: DateComponents(year: 2026, month: 9, day: day, hour: hour, minute: minute))!
+    }
+    let personal = Label(name: "Personal")
+    let work = Label(name: "Work")
+    var workspace = Workspace(labels: [personal, work])
+    expect(workspace.settings.resolvedDefaultLabelID(at: date(28, 10), calendar: calendar, validLabels: workspace.labels) == nil, "Uncategorized is initial default")
+    workspace.settings.defaultLabelID = personal.id
+    workspace.settings.scheduledDefaultEnabled = true
+    workspace.settings.scheduledLabelID = work.id
+    expect(workspace.settings.resolvedDefaultLabelID(at: date(29, 10), calendar: calendar, validLabels: workspace.labels) == personal.id, "unconfigured schedule uses fallback")
+    workspace.settings.scheduledCategoryConfigured = true
+    expect(workspace.settings.resolvedDefaultLabelID(at: date(29, 8), calendar: calendar, validLabels: workspace.labels) == work.id, "weekday schedule includes start")
+    expect(workspace.settings.resolvedDefaultLabelID(at: date(29, 16, 59), calendar: calendar, validLabels: workspace.labels) == work.id, "weekday schedule applies inside hours")
+    expect(workspace.settings.resolvedDefaultLabelID(at: date(29, 17), calendar: calendar, validLabels: workspace.labels) == personal.id, "weekday schedule excludes end")
+    expect(workspace.settings.resolvedDefaultLabelID(at: date(27, 10), calendar: calendar, validLabels: workspace.labels) == personal.id, "Sunday uses fallback")
+    workspace.settings.scheduledLabelID = nil
+    expect(workspace.settings.resolvedDefaultLabelID(at: date(29, 10), calendar: calendar, validLabels: workspace.labels) == nil, "Uncategorized can be an explicit scheduled choice")
+    workspace.settings.scheduledLabelID = work.id
+    let task = workspace.createTask(at: date(29, 10), calendar: calendar)
+    let note = workspace.createNote(at: date(29, 10), calendar: calendar)
+    let appointment = workspace.createAppointment(at: date(27, 19), calendar: calendar)
+    expect(task.labelID == work.id && note.labelID == work.id, "To-do and Note use scheduled default")
+    expect(appointment.labelID == personal.id, "Appointment uses creation time")
+    workspace.dates[0].date = date(29, 10)
+    workspace.settings.scheduledDefaultEnabled = false
+    expect(workspace.tasks[0].labelID == work.id && workspace.notes[0].labelID == work.id && workspace.dates[0].labelID == personal.id, "settings and Appointment date changes do not recategorize items")
+    workspace.settings.scheduledDefaultEnabled = true
+    workspace.settings.scheduledStartMinute = workspace.settings.scheduledEndMinute
+    expect(workspace.settings.resolvedDefaultLabelID(at: date(29, 10), calendar: calendar, validLabels: workspace.labels) == personal.id, "equal schedule times are inactive")
+    workspace.settings.scheduledStartMinute = 22 * 60
+    workspace.settings.scheduledEndMinute = 6 * 60
+    expect(workspace.settings.resolvedDefaultLabelID(at: date(29, 23), calendar: calendar, validLabels: workspace.labels) == personal.id, "overnight schedule is inactive")
+    workspace.deleteLabel(personal.id)
+    expect(workspace.settings.defaultLabelID == nil && workspace.dates[0].labelID == nil, "deleting fallback clears reference and uncategorizes item")
+    workspace.deleteLabel(work.id)
+    expect(workspace.settings.scheduledLabelID == nil && !workspace.settings.scheduledCategoryConfigured && !workspace.settings.scheduledDefaultEnabled, "deleting scheduled Category disables override")
+}
+
+func testSettingsPersistenceAndLegacyDefaults() throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let persistence = WorkspacePersistence(url: directory.appendingPathComponent("workspace.json"))
+    let label = Label(name: "Personal")
+    var workspace = Workspace(labels: [label])
+    workspace.settings.defaultLabelID = label.id
+    workspace.settings.scheduledDefaultEnabled = true
+    workspace.settings.scheduledCategoryConfigured = true
+    workspace.settings.scheduledLabelID = label.id
+    workspace.settings.scheduledWeekdays = [2, 4]
+    workspace.settings.scheduledStartMinute = 9 * 60
+    workspace.settings.scheduledEndMinute = 18 * 60
+    workspace.settings.showLineNumbers = false
+    workspace.settings.indentWidth = 8
+    workspace.settings.checkSpelling = false
+    workspace.settings.automaticCorrection = true
+    workspace.settings.smartQuotes = true
+    workspace.settings.smartDashes = true
+    try persistence.save(workspace)
+    let roundTrip = try persistence.load()
+    expect(roundTrip == workspace, "new Settings persist round trip")
+    var legacy = try JSONSerialization.jsonObject(with: Data(contentsOf: persistence.url)) as! [String: Any]
+    var oldSettings = legacy["settings"] as! [String: Any]
+    for key in ["defaultLabelID", "scheduledDefaultEnabled", "scheduledCategoryConfigured", "scheduledLabelID", "scheduledWeekdays", "scheduledStartMinute", "scheduledEndMinute", "showLineNumbers", "indentWidth", "checkSpelling", "automaticCorrection", "smartQuotes", "smartDashes", "appLockEnabled", "lockWhenInactive", "inactivityMinutes"] { oldSettings.removeValue(forKey: key) }
+    legacy["settings"] = oldSettings
+    try JSONSerialization.data(withJSONObject: legacy).write(to: persistence.url)
+    let loaded = try persistence.load()
+    let defaults = loaded.settings
+    expect(loaded.labels == [label], "legacy migration preserves existing Categories")
+    expect(defaults.defaultLabelID == nil && !defaults.scheduledDefaultEnabled && !defaults.scheduledCategoryConfigured && defaults.scheduledLabelID == nil, "old workspace has safe Category defaults")
+    expect(defaults.scheduledWeekdays == [2, 3, 4, 5, 6] && defaults.scheduledStartMinute == 480 && defaults.scheduledEndMinute == 1020, "old workspace has suggested schedule values")
+    expect(defaults.showLineNumbers && defaults.indentWidth == 4 && defaults.checkSpelling, "old workspace has Note editor defaults")
+    expect(!defaults.automaticCorrection && !defaults.smartQuotes && !defaults.smartDashes, "old workspace preserves Markdown source defaults")
+    expect(!defaults.appLockEnabled && !defaults.lockWhenInactive && defaults.inactivityMinutes == 5, "old workspace has App Lock off and a five minute default")
+    for width in [2, 4, 8] {
+        var settings = defaults
+        settings.indentWidth = width
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(settings))
+        expect(decoded.indentWidth == width, "supported indent width \(width) persists")
+    }
+    oldSettings["indentWidth"] = 3
+    legacy["settings"] = oldSettings
+    let invalid = try JSONDecoder().decode(Workspace.self, from: JSONSerialization.data(withJSONObject: legacy))
+    expect(invalid.settings.indentWidth == 4, "unsupported persisted indent width falls back to four spaces")
+}
+
+func testSecuritySettingsPersistenceAndValidation() throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let persistence = WorkspacePersistence(url: directory.appendingPathComponent("workspace.json"))
+    var workspace = Workspace()
+    expect(!workspace.settings.appLockEnabled && !workspace.settings.lockWhenInactive && workspace.settings.inactivityMinutes == 5, "App Lock defaults off")
+    workspace.settings.appLockEnabled = true
+    workspace.settings.lockWhenInactive = true
+    workspace.settings.inactivityMinutes = 120
+    try persistence.save(workspace)
+    let saved = try persistence.load()
+    expect(saved == workspace, "Security settings persist")
+    var encoded = try JSONSerialization.jsonObject(with: Data(contentsOf: persistence.url)) as! [String: Any]
+    for invalid in [0, -1, 121] {
+        var settings = encoded["settings"] as! [String: Any]
+        settings["inactivityMinutes"] = invalid
+        encoded["settings"] = settings
+        let loaded = try JSONDecoder().decode(Workspace.self, from: JSONSerialization.data(withJSONObject: encoded))
+        expect(loaded.settings.inactivityMinutes == 5, "invalid saved inactivity delay uses safe default")
+    }
+}
+
+testDeletingLabelUnlabelsEveryItemAndResetsFilter()
+testRetentionNeverDeletesOpenTasksOrFutureDates()
+testRetentionRemovesOnlyExpiredCompletedAndPassedItems()
+testGlobalContextMatchesAllAndOneLabel()
+try testPersistenceRoundTrip()
+try testNoteIconPersistenceAndLegacyFallback()
+try testMissingFileIsOnlyEmptyWorkspaceCase()
+try testFailedWriteKeepsInMemoryChanges()
+try testStoreEditAndRestoreSurviveReload()
+testDateGroupsAndChronologicalAccess()
+testUpcomingHorizonAndCategoryLimit()
+try testTSVImportAndAtomicPersistence()
+try testHorizonPersistenceAndMigration()
+testMarkdownSourceHighlighting()
+testIncompleteMarkdownWhileTyping()
+testNoteEditorStatus()
+testDefaultCategoryAndScheduleAtCreation()
+try testSettingsPersistenceAndLegacyDefaults()
+try testSecuritySettingsPersistenceAndValidation()
+print("PassingByTests: all tests passed")

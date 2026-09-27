@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1E2125"/>
+      <stop offset="100%" stop-color="#15171A"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#A98445"/>
+      <stop offset="55%" stop-color="#C6A35B"/>
+      <stop offset="100%" stop-color="#D6BB72"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Full 1024x1024 artwork. No outer corner mask: macOS applies its own presentation. -->
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+
+  <!-- Three identical pills, shifted horizontally to suggest passing motion. -->
+  <rect x="170" y="300" width="560" height="112" rx="56" fill="url(#gold)"/>
+  <rect x="232" y="456" width="560" height="112" rx="56" fill="url(#gold)"/>
+  <rect x="294" y="612" width="560" height="112" rx="56" fill="url(#gold)"/>
+</svg>
