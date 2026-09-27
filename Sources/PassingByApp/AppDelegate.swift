@@ -128,7 +128,7 @@ private enum Destination: Hashable {
         authenticationContext = context
         isAuthenticating = true
         context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Unlock Passing By") { [weak self] success, _ in
-            Swift.Task { @MainActor in
+            _Concurrency.Task { @MainActor in
                 guard let self, self.authenticationAttempt == attempt else { return }
                 self.authenticationContext = nil
                 self.isAuthenticating = false
@@ -155,7 +155,7 @@ private enum Destination: Hashable {
         let remaining = TimeInterval(workspace.settings.inactivityMinutes * 60) - Date().timeIntervalSince(inactiveSince)
         if remaining <= 0 { lockNow(); return }
         lockTimer = Timer.scheduledTimer(withTimeInterval: remaining, repeats: false) { [weak self] _ in
-            Swift.Task { @MainActor in
+            _Concurrency.Task { @MainActor in
                 guard let self, self.inactiveSince != nil, !NSApp.isActive else { return }
                 self.lockNow()
             }
