@@ -5,3 +5,8 @@ run = "./Scripts/build-release.sh"
 [tasks.test]
 description = "Run the Swift unit tests"
 run = "swift run PassingByTests"
+
+[tasks.release]
+description = "Trigger the manual GitHub release workflow"
+tools.gh = "2.101.0"
+run = "gh workflow run release.yml"
