@@ -6,6 +6,7 @@ public enum WorkspacePersistenceError: LocalizedError {
     case readFailed(Error)
     case decodeFailed(Error)
     case writeFailed(Error)
+    case migrationFailed(Error)
 
     public var errorDescription: String? {
         switch self {
@@ -13,6 +14,7 @@ public enum WorkspacePersistenceError: LocalizedError {
         case .readFailed(let error): "Passing By could not read your workspace: \(error.localizedDescription)"
         case .decodeFailed(let error): "Passing By could not open your workspace data: \(error.localizedDescription)"
         case .writeFailed(let error): "Passing By could not save your changes: \(error.localizedDescription)"
+        case .migrationFailed(let error): "Passing By could not move your existing workspace: \(error.localizedDescription)"
         }
     }
 }
@@ -39,14 +41,67 @@ public struct WorkspacePersistence {
         guard let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
             throw WorkspacePersistenceError.couldNotFindApplicationSupport
         }
-        return WorkspacePersistence(url: directory.appendingPathComponent("Passing by", isDirectory: true).appendingPathComponent("workspace.json"))
+        return try standard(applicationSupportDirectory: directory)
     }
 
-    private func fileExists() throws -> Bool {
+    // The directory argument also lets tests exercise migration without touching user data.
+    public static func standard(applicationSupportDirectory: URL) throws -> WorkspacePersistence {
+        let canonical = applicationSupportDirectory.appendingPathComponent("Passing By", isDirectory: true)
+        let legacy = applicationSupportDirectory.appendingPathComponent("Passing by", isDirectory: true)
+        let workspace = canonical.appendingPathComponent("workspace.json")
+        let oldWorkspace = legacy.appendingPathComponent("workspace.json")
+        let files = FileManager.default
+        do {
+            guard try exists(applicationSupportDirectory) else { return WorkspacePersistence(url: workspace) }
+            let entries = try files.contentsOfDirectory(at: applicationSupportDirectory, includingPropertiesForKeys: nil)
+            let hasCanonicalDirectory = entries.contains { $0.lastPathComponent == "Passing By" }
+            let hasLegacyDirectory = entries.contains { $0.lastPathComponent == "Passing by" }
+            // A canonical workspace always wins, including when the legacy copy remains.
+            if hasCanonicalDirectory {
+                if try exists(workspace) { return WorkspacePersistence(url: workspace) }
+            }
+            guard hasLegacyDirectory else { return WorkspacePersistence(url: workspace) }
+
+            let oldContents = try files.contentsOfDirectory(at: legacy, includingPropertiesForKeys: nil)
+            let oldWorkspaceExists = try exists(oldWorkspace)
+            // Backups or other files alone must never become an apparently empty workspace.
+            if !oldContents.isEmpty && !oldWorkspaceExists {
+                throw CocoaError(.fileReadNoSuchFile, userInfo: [NSFilePathErrorKey: oldWorkspace.path])
+            }
+            if !hasCanonicalDirectory {
+                // rename(2) also handles case-only changes on case-insensitive volumes.
+                // It publishes the complete directory in one atomic operation.
+                if rename(legacy.path, canonical.path) != 0 {
+                    throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
+                }
+            } else {
+                // A directory without workspace.json may already contain data. Copy into it
+                // without replacing anything, and publish workspace.json only after all peers.
+                for item in oldContents where item.lastPathComponent != "workspace.json" {
+                    let destination = canonical.appendingPathComponent(item.lastPathComponent)
+                    if try exists(destination) {
+                        throw CocoaError(.fileWriteFileExists, userInfo: [NSFilePathErrorKey: destination.path])
+                    }
+                    try files.copyItem(at: item, to: destination)
+                }
+                if oldWorkspaceExists { try files.copyItem(at: oldWorkspace, to: workspace) }
+            }
+            return WorkspacePersistence(url: workspace)
+        } catch {
+            throw WorkspacePersistenceError.migrationFailed(error)
+        }
+    }
+
+    private static func exists(_ url: URL) throws -> Bool {
         var details = stat()
         if lstat(url.path, &details) == 0 { return true }
         if errno == ENOENT { return false }
-        throw WorkspacePersistenceError.readFailed(NSError(domain: NSPOSIXErrorDomain, code: Int(errno)))
+        throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
+    }
+
+    private func fileExists() throws -> Bool {
+        do { return try Self.exists(url) }
+        catch { throw WorkspacePersistenceError.readFailed(error) }
     }
 
     public func load() throws -> Workspace {

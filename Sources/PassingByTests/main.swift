@@ -56,6 +56,59 @@ func testPersistenceRoundTrip() throws {
         try? FileManager.default.removeItem(at: url)
 }
 
+func testWorkspaceDirectoryMigration() throws {
+    let files = FileManager.default
+    let root = files.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+    defer { try? files.removeItem(at: root) }
+    let canonical = root.appendingPathComponent("Passing By", isDirectory: true)
+    let legacy = root.appendingPathComponent("Passing by", isDirectory: true)
+    let current = canonical.appendingPathComponent("workspace.json")
+    let old = legacy.appendingPathComponent("workspace.json")
+    let oldWorkspace = Workspace(notes: [Note(title: "Legacy")])
+
+    let empty = try WorkspacePersistence.standard(applicationSupportDirectory: root)
+    let initialWorkspace = try empty.load()
+    expect(empty.url == current && initialWorkspace == Workspace(), "no legacy data uses canonical path")
+    expect(!files.fileExists(atPath: canonical.path), "path lookup does not create an empty destination")
+
+    try WorkspacePersistence(url: old).save(oldWorkspace)
+    try Data("previous backup".utf8).write(to: old.appendingPathExtension("backup"))
+    try Data("other data".utf8).write(to: legacy.appendingPathComponent("settings.dat"))
+    let migrated = try WorkspacePersistence.standard(applicationSupportDirectory: root)
+    let loaded = try migrated.load()
+    let backupContents = try String(contentsOf: current.appendingPathExtension("backup"), encoding: .utf8)
+    let otherContents = try String(contentsOf: canonical.appendingPathComponent("settings.dat"), encoding: .utf8)
+    expect(migrated.url == current && loaded == oldWorkspace, "legacy workspace migrates to canonical path")
+    expect(backupContents == "previous backup", "migration preserves backup")
+    expect(otherContents == "other data", "migration preserves other persistence files")
+    let migratedEntries = try files.contentsOfDirectory(atPath: root.path)
+    expect(migratedEntries.contains("Passing By") && !migratedEntries.contains("Passing by"), "successful directory migration records canonical name")
+
+    let canonicalWorkspace = Workspace(notes: [Note(title: "Canonical")])
+    try migrated.save(canonicalWorkspace)
+    let selected = try WorkspacePersistence.standard(applicationSupportDirectory: root)
+    let selectedWorkspace = try selected.load()
+    expect(selectedWorkspace == canonicalWorkspace, "existing canonical workspace wins")
+}
+
+func testWorkspaceMigrationFailureKeepsLegacyData() throws {
+    let files = FileManager.default
+    let root = files.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+    defer { try? files.removeItem(at: root) }
+    let legacy = root.appendingPathComponent("Passing by", isDirectory: true)
+    let old = legacy.appendingPathComponent("workspace.json")
+    try files.createDirectory(at: legacy, withIntermediateDirectories: true)
+    try Data("legacy backup".utf8).write(to: old.appendingPathExtension("backup"))
+    do {
+        _ = try WorkspacePersistence.standard(applicationSupportDirectory: root)
+        expect(false, "backup without primary workspace must stop migration")
+    } catch { }
+    let preservedBackup = try String(contentsOf: old.appendingPathExtension("backup"), encoding: .utf8)
+    expect(preservedBackup == "legacy backup", "failed migration leaves legacy backup intact")
+    let remainingEntries = try files.contentsOfDirectory(atPath: root.path)
+    expect(remainingEntries.contains("Passing by") && !remainingEntries.contains("Passing By"), "failed migration does not publish a canonical directory")
+}
+
 func testNoteIconPersistenceAndLegacyFallback() throws {
     let note = Note(title: "Icon", iconName: "lightbulb")
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -474,6 +527,8 @@ testRetentionNeverDeletesOpenTasksOrFutureDates()
 testRetentionRemovesOnlyExpiredCompletedAndPassedItems()
 testGlobalContextMatchesAllAndOneLabel()
 try testPersistenceRoundTrip()
+try testWorkspaceDirectoryMigration()
+try testWorkspaceMigrationFailureKeepsLegacyData()
 try testNoteIconPersistenceAndLegacyFallback()
 try testMissingFileIsOnlyEmptyWorkspaceCase()
 try testFailedWriteKeepsInMemoryChanges()

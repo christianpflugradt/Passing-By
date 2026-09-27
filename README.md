@@ -43,7 +43,7 @@ The local build copies `Resources/Info.plist`, where `CFBundleShortVersionString
 
 ## Data and privacy
 
-The workspace is saved automatically at `~/Library/Application Support/Passing by/workspace.json`. On each subsequent save, the last readable version is copied to `workspace.json.backup`.
+The workspace is saved automatically at `~/Library/Application Support/Passing By/workspace.json`. On each subsequent save, the last readable version is copied to `workspace.json.backup`. Existing data in the former `Passing by` directory is migrated on first launch.
 
 Optional App Lock uses native macOS authentication to protect access to the application UI. It does **not** encrypt the workspace file.
 
