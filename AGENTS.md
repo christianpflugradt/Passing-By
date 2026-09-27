@@ -120,3 +120,5 @@ Before considering a task complete:
 - no unrelated product behaviour has been introduced.
 
 For substantial product work, perform a final review against the relevant `Product.md` verification criteria and report any remaining deviations explicitly.
+
+After completing a task, commit its changes using the repository's commit-message convention and push the branch to its upstream. Report the commit and push result; if the push fails, report the failure without discarding the commit.
