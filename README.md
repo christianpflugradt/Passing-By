@@ -1,31 +1,37 @@
 # Passing By
 
-Passing By is a small native macOS workspace for information that matters now: to-dos, appointments, and Markdown notes. It is local-first, keyboard-friendly, and designed to stay calm and low-distraction. See [Product.md](Product.md) for the detailed product specification.
+Passing By is a small native macOS workspace for information that matters now: to-dos, appointments, and Markdown notes. It keeps your information on your Mac and is designed to stay calm and low-distraction.
 
 ## Features
 
 - A compact dashboard for open to-dos and upcoming appointments.
-- To-dos, date-based appointments, and editable Markdown source notes with syntax highlighting and native Find.
-- Optional categories, a shared category filter, and a scheduled default category for new items.
-- Appointment import from TSV, configurable retention for completed to-dos and passed appointments, and optional App Lock.
+- To-dos, date-based appointments, and notes you can edit directly in Markdown.
+- Optional categories to group and filter your items.
+- Appointment import from TSV, control over how long completed to-dos and past appointments are kept, and optional App Lock.
 
-## Requirements
+## Install
 
-- macOS 14 or later.
-- Apple Command Line Tools with Swift 6 or later (`xcode-select --install`); the app uses the system Swift toolchain and macOS frameworks.
-- [Mise](https://mise.jdx.dev/) for the recommended development commands. No separate Node.js runtime is required to build or run the app.
+Passing By requires macOS 14 or later.
 
-### Installation
+Download the latest `Passing-By-<version>.zip` from [GitHub Releases](https://github.com/christianpflugradt/PassingBy/releases), extract it, and move `Passing By.app` to `/Applications`.
 
-Download the latest `Passing-By-<version>.zip` from GitHub Releases, extract it, and move `Passing By.app` to your `/Applications` folder.
-
-Passing By is distributed without Apple Developer ID signing or notarization because the project does not use an Apple Developer Program membership. As a result, macOS Gatekeeper will normally prevent a downloaded build from opening. If you trust the release downloaded from this repository, remove the quarantine attribute once after installing or updating the app:
+The app is ad hoc signed and is not notarized, so macOS may block it from opening. If you trust the copy downloaded from this repository, run this command in Terminal after moving it to `/Applications`:
 
 ```bash
 xattr -dr com.apple.quarantine "/Applications/Passing By.app"
 ```
 
+To update, quit Passing By, replace the app in `/Applications` with the newer release, and repeat the command if macOS blocks the new copy.
+
+## Data and privacy
+
+Your workspace is saved automatically at `~/Library/Application Support/Passing By/workspace.json`. On each subsequent save, the last readable version is copied to `workspace.json.backup`. Existing data in the former `Passing by` directory is migrated on first launch.
+
+Optional App Lock uses native macOS authentication to protect access to the application UI. It does **not** encrypt the workspace file.
+
 ## Development
+
+You need Apple Command Line Tools with Swift 6 or later (`xcode-select --install`) and [Mise](https://mise.jdx.dev/) for the commands below. No separate Node.js runtime is required to build or run the app. See [Product.md](Product.md) for the product specification.
 
 From the repository root:
 
@@ -45,17 +51,9 @@ Allowed scopes: `app`, `ui`, `notes`, `todos`, `appointments`, `settings`, `pers
 
 Examples: `build: assemble local app`, `fix(ui): correct sidebar alignment`, `docs: clarify setup`.
 
-## Releases
-
-Download macOS builds from [GitHub Releases](https://github.com/christianpflugradt/PassingBy/releases). Each `Passing-By-<version>.zip` contains `Passing By.app`. Quit older running copies before opening a new release. The app is ad hoc signed and is not notarized.
+### Releases
 
 Releases use Semantic Release and SemVer. Run `mise run release` to start the manual GitHub workflow; Conventional Commits determine the next version. After tests pass, Semantic Release passes that version directly to the release build and packaging steps, creates the `v<version>` tag, and publishes the GitHub Release with the ZIP attached. For local packaging checks, run `RELEASE_VERSION=1.2.3 mise run build && RELEASE_VERSION=1.2.3 mise run package` with a test version.
-
-## Data and privacy
-
-The workspace is saved automatically at `~/Library/Application Support/Passing By/workspace.json`. On each subsequent save, the last readable version is copied to `workspace.json.backup`. Existing data in the former `Passing by` directory is migrated on first launch.
-
-Optional App Lock uses native macOS authentication to protect access to the application UI. It does **not** encrypt the workspace file.
 
 ## License
 
