@@ -6,14 +6,18 @@ cd "$root"
 swift build -c release --product PassingByApp
 bin_path="$(swift build -c release --show-bin-path)"
 app="$root/build/Passing By.app"
-rm -rf "$app"
-mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
-cp "$bin_path/PassingByApp" "$app/Contents/MacOS/PassingBy"
-cp "$root/Resources/Info.plist" "$app/Contents/Info.plist"
+mkdir -p "$root/build"
+staging="$(mktemp -d "$root/build/.passing-by.XXXXXX")"
+trap 'rm -rf "$staging"' EXIT
+staged_app="$staging/Passing By.app"
+mkdir -p "$staged_app/Contents/MacOS" "$staged_app/Contents/Resources"
+cp "$bin_path/PassingByApp" "$staged_app/Contents/MacOS/PassingBy"
+cp "$root/Resources/Info.plist" "$staged_app/Contents/Info.plist"
 
-iconset="$(mktemp -d)/PassingBy.iconset"
+icon_tmp="$(mktemp -d)"
+trap 'rm -rf "$staging" "$icon_tmp"' EXIT
+iconset="$icon_tmp/PassingBy.iconset"
 mkdir -p "$iconset"
-trap 'rm -rf "${iconset:h}"' EXIT
 for size in 16 32 128 256 512; do
   for scale in 1 2; do
     pixels=$((size * scale))
@@ -24,7 +28,9 @@ for size in 16 32 128 256 512; do
       --out "$iconset/icon_${size}x${size}${suffix}.png" >/dev/null
   done
 done
-iconutil -c icns "$iconset" -o "$app/Contents/Resources/PassingBy.icns"
+iconutil -c icns "$iconset" -o "$staged_app/Contents/Resources/PassingBy.icns"
 
-codesign --force --sign - "$app"
+codesign --force --sign - "$staged_app"
+rm -rf "$app"
+mv "$staged_app" "$app"
 print "Built $app"

@@ -1,35 +1,46 @@
 # Passing By
 
-Passing By is a small native macOS workspace for temporary notes, to-dos, and appointments.
+Passing By is a small native macOS workspace for information that matters now: to-dos, appointments, and Markdown notes. It is local-first, keyboard-friendly, and designed to stay calm and low-distraction. See [Product.md](Product.md) for the detailed product specification.
+
+## Features
+
+- A compact dashboard for open to-dos and upcoming appointments.
+- To-dos, date-based appointments, and editable Markdown source notes with syntax highlighting and native Find.
+- Optional categories, a shared category filter, and a scheduled default category for new items.
+- Appointment import from TSV, configurable retention for completed to-dos and passed appointments, and optional App Lock.
 
 ## Requirements
 
-macOS 14 or later and the Apple Command Line Tools (`xcode-select --install`).
+- macOS 14 or later.
+- Apple Command Line Tools with Swift 6 or later (`xcode-select --install`); the app uses the system Swift toolchain and macOS frameworks.
+- [Mise](https://mise.jdx.dev/) for the recommended development commands. No separate Node.js runtime is required to build or run the app.
 
 ## Development
 
-```sh
-swift build
-swift run PassingByApp
-swift run PassingByTests
-```
-
-## Release app
+From the repository root:
 
 ```sh
-chmod +x Scripts/build-release.sh
-Scripts/build-release.sh
-open "build/Passing By.app"
+mise install
+mise run build
+mise run test
 ```
 
-The release bundle is `build/Passing By.app`. It is ad-hoc signed for local use; drag it to `/Applications` if you want it installed there.
+`mise run build` creates `build/Passing By.app`. Open that bundle from Finder to run it. The build is ad hoc signed for local use; no published release is required.
 
-## Commit messages
-
-After cloning, run `sh Scripts/setup-git-hooks.sh` to enable the repository-local commit hook. Future commits must use `type(scope): description` with a non-empty description.
+After cloning, run `sh Scripts/setup-git-hooks.sh` to enable the repository commit-message hook. Commit subjects use `type(scope): description` with a non-empty description.
 
 Allowed types: `feat`, `fix`, `refactor`, `perf`, `test`, `docs`, `build`, `ci`, `chore`, `style`, `revert`.
 
 Allowed scopes: `app`, `ui`, `notes`, `todos`, `appointments`, `settings`, `persistence`, `security`, `build`, `release`, `docs`, `deps`, `tests`.
 
-Examples: `feat(notes): add folding support`, `fix(ui): correct sidebar alignment`, `docs(docs): explain app lock`.
+Examples: `build(build): assemble local app`, `fix(ui): correct sidebar alignment`, `docs(docs): clarify setup`.
+
+## Data and privacy
+
+The workspace is saved automatically at `~/Library/Application Support/Passing by/workspace.json`. On each subsequent save, the last readable version is copied to `workspace.json.backup`.
+
+Optional App Lock uses native macOS authentication to protect access to the application UI. It does **not** encrypt the workspace file.
+
+## License
+
+Passing By is licensed under [Apache-2.0](LICENSE).

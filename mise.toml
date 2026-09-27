@@ -1,0 +1,7 @@
+[tasks.build]
+description = "Build a local macOS app bundle"
+run = "./Scripts/build-release.sh"
+
+[tasks.test]
+description = "Run the Swift unit tests"
+run = "swift run PassingByTests"
