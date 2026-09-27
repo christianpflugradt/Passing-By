@@ -9,10 +9,10 @@ if [ "$subject" = 'Initial commit' ] && ! git rev-parse --verify HEAD >/dev/null
     exit 0
 fi
 
-if printf '%s\n' "$subject" | grep -Eq '^(feat|fix|refactor|perf|test|docs|build|ci|chore|style|revert)\((app|ui|notes|todos|appointments|settings|persistence|security|build|release|docs|deps|tests)\): [^[:space:]].*$'; then
+if printf '%s\n' "$subject" | grep -Eq '^(feat|fix|refactor|perf|test|docs|build|ci|chore|style|revert)(\((app|ui|notes|todos|appointments|settings|persistence|security|build|release|docs|deps|tests)\))?: [^[:space:]].*$'; then
     exit 0
 fi
 
-printf '%s\n' 'Invalid commit message. Use type(scope): description.' >&2
+printf '%s\n' 'Invalid commit message. Use type: description or type(scope): description.' >&2
 printf '%s\n' 'See README.md for allowed types and scopes.' >&2
 exit 1

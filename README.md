@@ -15,6 +15,16 @@ Passing By is a small native macOS workspace for information that matters now: t
 - Apple Command Line Tools with Swift 6 or later (`xcode-select --install`); the app uses the system Swift toolchain and macOS frameworks.
 - [Mise](https://mise.jdx.dev/) for the recommended development commands. No separate Node.js runtime is required to build or run the app.
 
+### Installation
+
+Download the latest `Passing-By-<version>.zip` from GitHub Releases, extract it, and move `Passing By.app` to your `/Applications` folder.
+
+Passing By is distributed without Apple Developer ID signing or notarization because the project does not use an Apple Developer Program membership. As a result, macOS Gatekeeper will normally prevent a downloaded build from opening. If you trust the release downloaded from this repository, remove the quarantine attribute once after installing or updating the app:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/Passing By.app"
+```
+
 ## Development
 
 From the repository root:
@@ -27,13 +37,13 @@ mise run test
 
 `mise run build` creates `build/Passing By.app`. Open that bundle from Finder to run it. The build is ad hoc signed. Local builds have a separate development app identity and display “Development build” in About.
 
-After cloning, run `sh Scripts/setup-git-hooks.sh` to enable the repository commit-message hook. Commit subjects use `type(scope): description` with a non-empty description.
+After cloning, run `sh Scripts/setup-git-hooks.sh` to enable the repository commit-message hook. Commit subjects use `type: description` or `type(scope): description` with a non-empty description. If included, the scope must be one of those listed below.
 
 Allowed types: `feat`, `fix`, `refactor`, `perf`, `test`, `docs`, `build`, `ci`, `chore`, `style`, `revert`.
 
 Allowed scopes: `app`, `ui`, `notes`, `todos`, `appointments`, `settings`, `persistence`, `security`, `build`, `release`, `docs`, `deps`, `tests`.
 
-Examples: `build(build): assemble local app`, `fix(ui): correct sidebar alignment`, `docs(docs): clarify setup`.
+Examples: `build: assemble local app`, `fix(ui): correct sidebar alignment`, `docs: clarify setup`.
 
 ## Releases
 
