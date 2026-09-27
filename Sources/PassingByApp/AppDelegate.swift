@@ -38,6 +38,7 @@ private enum Destination: Hashable {
     @Published var editingAppointmentID: UUID?
     @Published var deletingAppointmentID: UUID?
     @Published var confirmNoteDeletion = false
+    @Published var showReorderNotes = false
     @Published var iconPickerNoteID: UUID?
     @Published var focusNoteTitleID: UUID?
     @Published var titleFocusNonce = 0
@@ -79,7 +80,7 @@ private enum Destination: Hashable {
         case .label(let id): workspace.labels.first { $0.id == id }?.name ?? "All"
         }
     }
-    var notes: [Note] { workspace.notes.filter { workspace.matches($0.labelID) }.sorted { $0.createdAt < $1.createdAt } }
+    var notes: [Note] { workspace.visibleNotes }
     var tasks: [Task] { workspace.tasks.filter { workspace.matches($0.labelID) && (showCompleted || $0.completedAt == nil) }.sorted { $0.createdAt < $1.createdAt } }
     var appointments: [DateItem] { workspace.matchingDates(showPast: showPast) }
     var label: PassingByCore.Label? { workspace.labels.first { $0.id == labelID } }
@@ -286,6 +287,7 @@ private struct AppShortcut {
     static let settings = Self(key: ",", modifiers: .command, display: "⌘,", description: "Settings")
     static let newItem = Self(key: "n", modifiers: .command, display: "⌘N", description: "New item for the current view")
     static let newNote = Self(key: "n", modifiers: [.command, .shift], display: "⇧⌘N", description: "New Note")
+    static let reorderNotes = Self(key: "r", modifiers: [.command, .option], display: "⌥⌘R", description: "Reorder Notes")
     static let noteTitle = Self(key: "t", modifiers: [.command, .shift], display: "⇧⌘T", description: "Focus Note Title")
     static let delete = Self(key: .delete, modifiers: .command, display: "⌘⌫", description: "Delete current or selected item")
     static let lock = Self(key: "l", modifiers: [.command, .shift], display: "⇧⌘L", description: "Lock Passing By (when enabled)")
@@ -304,7 +306,7 @@ private struct AppShortcut {
     @StateObject private var startup = Startup()
     private var shortcutNotes: [Note] {
         guard let state = startup.state, !state.isLocked else { return [] }
-        return Array(state.notes.prefix(6))
+        return state.workspace.shortcutNotes
     }
     var body: some Scene {
         Window("Passing By", id: "main") { StartupView(startup: startup) }
@@ -328,6 +330,10 @@ private struct AppShortcut {
                         Button(note.title.isEmpty ? "Untitled Note" : note.title) { startup.state?.destination = .note(note.id) }
                         .keyboardShortcut(AppShortcut.note(index, title: note.title).key, modifiers: AppShortcut.note(index, title: note.title).modifiers)
                     }
+                    Divider()
+                    Button("Reorder Notes…") { startup.state?.showReorderNotes = true }
+                        .keyboardShortcut(AppShortcut.reorderNotes.key, modifiers: AppShortcut.reorderNotes.modifiers)
+                        .disabled((startup.state?.workspace.notes.count ?? 0) < 2 || (startup.state?.isLocked ?? true))
                 }
                 CommandGroup(replacing: .help) {
                     Button("Passing By Help") { startup.state?.destination = .help }
@@ -445,13 +451,14 @@ private struct WorkspaceView: View {
                 case .tasks: TasksView(state: state)
                 case .appointments: AppointmentsView(state: state)
                 case .note(let id): NoteView(state: state, id: id)
-                case .help: HelpView(notes: state.notes)
+                case .help: HelpView(notes: state.workspace.shortcutNotes)
                 case .settings: SettingsView(state: state)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(minWidth: 650, minHeight: 410)
+        .sheet(isPresented: $state.showReorderNotes) { ReorderNotesView(state: state) }
         .alert("Could Not Save Changes", isPresented: Binding(get: { state.error != nil }, set: { if !$0 { state.error = nil } })) {
             Button("Retry") { state.flush() }
             Button("Keep Editing", role: .cancel) { }
@@ -473,6 +480,55 @@ private struct WorkspaceView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain).help(title).accessibilityLabel(title)
+    }
+}
+
+private struct ReorderNotesView: View {
+    @ObservedObject var state: WorkspaceState
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Reorder Notes").font(.title2.weight(.semibold))
+            List {
+                ForEach(state.workspace.notes) { note in
+                    HStack(spacing: 12) {
+                        VStack(spacing: 3) {
+                            ForEach(0..<3, id: \.self) { _ in
+                                HStack(spacing: 3) {
+                                    Circle().frame(width: 3, height: 3)
+                                    Circle().frame(width: 3, height: 3)
+                                }
+                            }
+                        }
+                        .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
+                        Image(systemName: availableNoteIcon(note.iconName))
+                            .frame(width: 22)
+                        Text(note.title.isEmpty ? "Untitled Note" : note.title)
+                            .lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                    .draggable(note.id.uuidString)
+                    .dropDestination(for: String.self) { identifiers, _ in
+                        guard let identifier = identifiers.first, let sourceID = UUID(uuidString: identifier),
+                              let source = state.workspace.notes.firstIndex(where: { $0.id == sourceID }),
+                              let target = state.workspace.notes.firstIndex(where: { $0.id == note.id }) else { return false }
+                        state.change { $0.moveNote(from: source, to: target) }
+                        return true
+                    }
+                }
+            }
+            .frame(minHeight: 150, maxHeight: 400)
+            HStack {
+                Spacer()
+                Button("Done") { dismiss() }
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20)
+        .frame(width: 360)
     }
 }
 
@@ -849,7 +905,7 @@ private struct HelpView: View {
     private var shortcuts: [AppShortcut] {
         [AppShortcut.dashboard, .tasks, .appointments] +
         Array(notes.prefix(6).enumerated()).map { AppShortcut.note($0.offset, title: $0.element.title) } +
-        [.help, .settings, .newItem, .newNote, .noteTitle, .delete, .lock, .find, .findNext, .findPrevious]
+        [.help, .settings, .newItem, .newNote, .reorderNotes, .noteTitle, .delete, .lock, .find, .findNext, .findPrevious]
     }
     var body: some View {
         ScrollView {

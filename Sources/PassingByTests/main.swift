@@ -131,6 +131,47 @@ func testNoteIconPersistenceAndLegacyFallback() throws {
     expect(loadedUnknown.notes[0].iconName == NoteIcon.defaultName, "unknown icon falls back safely")
 }
 
+func testManualNoteOrderAndPersistence() throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let persistence = WorkspacePersistence(url: directory.appendingPathComponent("workspace.json"))
+    let notes = (0..<7).map { Note(title: "Note \($0)") }
+    let store = try AppStore(persistence: persistence)
+    store.change { $0.notes = notes }
+    store.change { $0.moveNote(from: 6, to: 0) }
+    expect(store.workspace.notes.map(\.id) == [notes[6].id] + notes.prefix(6).map(\.id), "moving changes canonical order")
+    expect(store.workspace.shortcutNotes.map(\.id) == [notes[6].id] + notes.prefix(5).map(\.id), "first six shortcuts follow canonical order")
+    let movedReload = try persistence.load()
+    expect(movedReload.notes.map(\.id) == store.workspace.notes.map(\.id), "manual order survives JSON persistence")
+
+    store.change { $0.notes[0].title = "Renamed" }
+    expect(store.workspace.notes[0].id == notes[6].id && store.workspace.shortcutNotes[0].title == "Renamed", "rename keeps position and updates shortcut title")
+    store.change { $0.notes.removeAll { $0.id == notes[1].id } }
+    expect(store.workspace.notes.map(\.id) == [notes[6].id, notes[0].id] + notes[2..<6].map(\.id), "deletion preserves remaining order")
+    expect(store.workspace.shortcutNotes.count == 6 && store.workspace.shortcutNotes.last?.id == notes[5].id, "shortcut gap closes after deletion")
+    store.change { _ = $0.createNote() }
+    expect(store.workspace.notes.last?.title == "Untitled Note", "creation appends Note")
+    let appendedReload = try persistence.load()
+    expect(store.workspace.notes.last?.id == appendedReload.notes.last?.id, "appended Note persists at end")
+}
+
+func testLegacyNoteOrderMatchesPreviousDisplay() throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let persistence = WorkspacePersistence(url: directory.appendingPathComponent("workspace.json"))
+    let old = Note(title: "Old", createdAt: Date(timeIntervalSinceReferenceDate: 1))
+    let recent = Note(title: "Recent", createdAt: Date(timeIntervalSinceReferenceDate: 2))
+    try persistence.save(Workspace(notes: [recent, old]))
+    var json = try JSONSerialization.jsonObject(with: Data(contentsOf: persistence.url)) as! [String: Any]
+    json.removeValue(forKey: "noteOrderVersion")
+    try JSONSerialization.data(withJSONObject: json).write(to: persistence.url)
+    let loaded = try persistence.load()
+    expect(loaded.notes.map(\.id) == [old.id, recent.id], "legacy workspace keeps previous creation-time display order")
+    try persistence.save(loaded)
+    let savedReload = try persistence.load()
+    expect(savedReload.notes.map(\.id) == [old.id, recent.id], "legacy order stays canonical after save")
+}
+
 func testMissingFileIsOnlyEmptyWorkspaceCase() throws {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
     let url = directory.appendingPathComponent("workspace.json")
@@ -530,6 +571,8 @@ try testPersistenceRoundTrip()
 try testWorkspaceDirectoryMigration()
 try testWorkspaceMigrationFailureKeepsLegacyData()
 try testNoteIconPersistenceAndLegacyFallback()
+try testManualNoteOrderAndPersistence()
+try testLegacyNoteOrderMatchesPreviousDisplay()
 try testMissingFileIsOnlyEmptyWorkspaceCase()
 try testFailedWriteKeepsInMemoryChanges()
 try testStoreEditAndRestoreSurviveReload()

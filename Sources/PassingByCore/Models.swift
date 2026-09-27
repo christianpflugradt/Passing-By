@@ -171,7 +171,34 @@ public struct Workspace: Codable, Equatable {
     public var tasks: [Task] = []
     public var dates: [DateItem] = []
     public var settings = AppSettings()
+    // Version 1 stores the user-defined order directly in `notes`. Older files
+    // displayed Notes by creation time, regardless of their array order.
+    private var noteOrderVersion = 1
     public init(labels: [Label] = [], notes: [Note] = [], tasks: [Task] = [], dates: [DateItem] = [], settings: AppSettings = AppSettings()) { self.labels = labels; self.notes = notes; self.tasks = tasks; self.dates = dates; self.settings = settings }
+
+    private enum CodingKeys: String, CodingKey { case labels, notes, tasks, dates, settings, noteOrderVersion }
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        labels = try values.decode([Label].self, forKey: .labels)
+        notes = try values.decode([Note].self, forKey: .notes)
+        tasks = try values.decode([Task].self, forKey: .tasks)
+        dates = try values.decode([DateItem].self, forKey: .dates)
+        settings = try values.decode(AppSettings.self, forKey: .settings)
+        if try values.decodeIfPresent(Int.self, forKey: .noteOrderVersion) == nil {
+            notes = notes.enumerated().sorted {
+                $0.element.createdAt == $1.element.createdAt ? $0.offset < $1.offset : $0.element.createdAt < $1.element.createdAt
+            }.map(\.element)
+        }
+    }
+
+    public mutating func moveNote(from source: Int, to destination: Int) {
+        guard notes.indices.contains(source), (0..<notes.count).contains(destination), source != destination else { return }
+        let note = notes.remove(at: source)
+        notes.insert(note, at: destination)
+    }
+
+    public var visibleNotes: [Note] { notes.filter { matches($0.labelID) } }
+    public var shortcutNotes: [Note] { Array(visibleNotes.prefix(6)) }
 
     public mutating func deleteLabel(_ id: UUID) {
         labels.removeAll { $0.id == id }
