@@ -411,15 +411,9 @@ Notes use Markdown as their editing format.
 
 ## 12.1 Editing model
 
-Markdown is edited directly as source text.
+Markdown is edited directly as source text by default. The editor is not a WYSIWYG editor and does not generally render Markdown into rich text while editing. Syntax normally remains visible. Deliberate, narrowly specified interactive exceptions are allowed when they make a frequent action easier, provided the Note remains editable and stored as Markdown source.
 
-The application must not use WYSIWYG editing.
-
-The application must not automatically render Markdown into rich text while editing.
-
-The Markdown syntax remains visible except for task-list checkbox markers, which appear as clickable checkboxes.
-
-Notes are Markdown source editors, not rendered Markdown or WYSIWYG editors. Highlighting may use semantic color and font traits, but must never conceal syntax or change the underlying source except for task-list checkbox markers. A click on a checkbox toggles the corresponding Markdown marker between `[ ]` and `[x]`; the stored text and copy and paste remain literal Markdown. Links remain editable as source; a deliberate Command-click may open a recognized URL.
+Task-list checkbox markers in unordered and ordered lists are one such exception: `[ ]`, `[x]`, and `[X]` appear as clickable checkboxes because clicking is simpler than editing the marker to toggle its state. A click changes the corresponding source marker between `[ ]` and `[x]`. Copy and paste preserve literal Markdown. Other Markdown syntax remains visible; highlighting may use semantic color and font traits without changing the underlying source. Links remain editable as source; a deliberate Command-click may open a recognized URL.
 
 Example:
 
@@ -449,8 +443,6 @@ At minimum, syntax highlighting should support:
 - inline code,
 - fenced code blocks,
 - blockquotes.
-
-Task-list markers in unordered and ordered lists appear as clickable checkboxes while their Markdown source remains editable and preserved.
 
 The purpose of highlighting is readability, not rendering.
 
