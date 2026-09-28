@@ -394,7 +394,7 @@ private struct StartupView: View {
                 if state.isLocked { LockedView(state: state) }
                 else { WorkspaceView(state: state) }
             } else {
-                ContentUnavailableView("Workspace Could Not Open", systemImage: "exclamationmark.triangle", description: Text(startup.error ?? "The workspace could not be loaded."))
+                ContentUnavailableView("Workspace Could Not Open", systemImage: AppSymbol.error, description: Text(startup.error ?? "The workspace could not be loaded."))
             }
         }
         .onAppear { if NSApp.isActive { startup.state?.becameActive() } else { startup.state?.becameInactive() } }
@@ -406,7 +406,7 @@ private struct LockedView: View {
     @ObservedObject var state: WorkspaceState
     var body: some View {
         VStack(spacing: 18) {
-            Image(systemName: "lock.fill").font(.system(size: 42)).foregroundStyle(.secondary)
+            Image(systemName: AppSymbol.locked).font(.system(size: 42)).foregroundStyle(.secondary)
             Text("Passing By").font(.title2.weight(.semibold))
             Text("Locked").foregroundStyle(.secondary)
             Button("Unlock") { state.unlock() }.disabled(state.isAuthenticating)
@@ -426,21 +426,21 @@ private struct WorkspaceView: View {
                 VStack(spacing: 0) {
                     ScrollView {
                         VStack(spacing: 5) {
-                            sidebarButton("Dashboard", icon: "square.grid.2x2", destination: .dashboard)
-                            sidebarButton("To-dos", icon: "checklist", destination: .tasks)
-                            sidebarButton("Appointments", icon: "calendar", destination: .appointments)
+                            sidebarButton("Dashboard", icon: AppSymbol.dashboard, destination: .dashboard)
+                            sidebarButton("To-dos", icon: AppSymbol.todos, destination: .tasks)
+                            sidebarButton("Appointments", icon: AppSymbol.appointments, destination: .appointments)
                             Divider().padding(.vertical, 11).padding(.horizontal, 13)
                             ForEach(state.notes) { note in
                                 sidebarButton(note.title.isEmpty ? "Untitled Note" : note.title, icon: availableNoteIcon(note.iconName), destination: .note(note.id), categoryID: note.labelID)
                             }
-                            Button(action: state.createNote) { Image(systemName: "plus").font(.system(size: 17)).frame(width: 48, height: 44).contentShape(Rectangle()) }
+                            Button(action: state.createNote) { Image(systemName: AppSymbol.add).font(.system(size: 17)).frame(width: 48, height: 44).contentShape(Rectangle()) }
                                 .buttonStyle(.plain).help("New Note").accessibilityLabel("New Note")
                         }
                         .padding(.top, 12)
                     }
                     Spacer(minLength: 0)
-                    sidebarButton("Help", icon: "questionmark.circle", destination: .help)
-                    sidebarButton("Settings", icon: "gearshape", destination: .settings).padding(.bottom, 12)
+                    sidebarButton("Help", icon: AppSymbol.help, destination: .help)
+                    sidebarButton("Settings", icon: AppSymbol.settings, destination: .settings).padding(.bottom, 12)
                 }
                 .frame(width: 68, height: geometry.size.height)
             }
@@ -605,7 +605,7 @@ private struct DashboardView: View {
                         }
                         ForEach(openTasks) { task in
                             HStack(spacing: 12) {
-                                Button { state.editTask(task.id) { $0.completedAt = Date() } } label: { Image(systemName: "circle") }
+                                Button { state.editTask(task.id) { $0.completedAt = Date() } } label: { Image(systemName: AppSymbol.incomplete) }
                                     .font(.title3).buttonStyle(.plain).foregroundStyle(.secondary)
                                     .accessibilityLabel("Complete \(task.title)")
                                 categoryDot(task.labelID, state.workspace.labels)
@@ -668,7 +668,7 @@ private struct TasksView: View {
         VStack(alignment: .leading, spacing: 0) {
             PageHeader(title: "To-dos") {
                 LabelFilter(state: state)
-                Button { state.editingTaskID = state.createTask() } label: { Image(systemName: "plus") }
+                Button { state.editingTaskID = state.createTask() } label: { Image(systemName: AppSymbol.add) }
                     .help("New To-do")
             }
             Toggle("Show Completed To-dos", isOn: $state.showCompleted).toggleStyle(.checkbox)
@@ -683,7 +683,7 @@ private struct TasksView: View {
                                 Button {
                                     state.editTask(task.id) { $0.completedAt = task.completedAt == nil ? Date() : nil }
                                 } label: {
-                                    Image(systemName: task.completedAt == nil ? "circle" : "checkmark.circle.fill")
+                                    Image(systemName: task.completedAt == nil ? AppSymbol.incomplete : AppSymbol.complete)
                                         .font(.title3).foregroundStyle(task.completedAt == nil ? .secondary : .tertiary)
                                 }.buttonStyle(.plain).accessibilityLabel(task.completedAt == nil ? "Complete \(task.title)" : "Restore \(task.title)")
                                 categoryDot(task.labelID, state.workspace.labels)
@@ -693,7 +693,7 @@ private struct TasksView: View {
                                     .strikethrough(task.completedAt != nil)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                 if !task.taskDescription.isEmpty {
-                                    Button { state.describingTaskID = task.id } label: { Image(systemName: "info.circle") }
+                                    Button { state.describingTaskID = task.id } label: { Image(systemName: AppSymbol.details) }
                                         .buttonStyle(.plain).foregroundStyle(.secondary)
                                         .help(task.taskDescription)
                                         .popover(isPresented: Binding(get: { state.describingTaskID == task.id }, set: { if !$0 { state.describingTaskID = nil } })) {
@@ -703,7 +703,7 @@ private struct TasksView: View {
                                 Menu {
                                     Button("Edit") { state.editingTaskID = task.id }
                                     Button("Delete", role: .destructive) { state.change { $0.tasks.removeAll { $0.id == task.id } } }
-                                } label: { Image(systemName: "ellipsis").frame(width: 22) }
+                                } label: { Image(systemName: AppSymbol.more).frame(width: 22) }
                                     .menuStyle(.borderlessButton).menuIndicator(.hidden).help("To-do actions")
                             }
                             .padding(.vertical, 17)
@@ -749,7 +749,7 @@ private struct AppointmentsView: View {
         VStack(alignment: .leading, spacing: 0) {
             PageHeader(title: "Appointments") {
                 LabelFilter(state: state)
-                Button { state.editingAppointmentID = state.createAppointment() } label: { Image(systemName: "plus") }
+                Button { state.editingAppointmentID = state.createAppointment() } label: { Image(systemName: AppSymbol.add) }
                     .help("New Appointment")
             }
             HStack {
@@ -818,9 +818,9 @@ private struct AppointmentsView: View {
             }
             .foregroundStyle(state.workspace.isPassed(item) ? .secondary : .primary)
             .frame(maxWidth: .infinity, alignment: .leading)
-            Button { state.editingAppointmentID = item.id } label: { Image(systemName: "pencil") }
+            Button { state.editingAppointmentID = item.id } label: { Image(systemName: AppSymbol.edit) }
                 .buttonStyle(.plain).foregroundStyle(.secondary).help("Edit Appointment")
-            Button { state.deletingAppointmentID = item.id } label: { Image(systemName: "trash") }
+            Button { state.deletingAppointmentID = item.id } label: { Image(systemName: AppSymbol.delete) }
                 .buttonStyle(.plain).foregroundStyle(.secondary).help("Delete Appointment")
         }
           .padding(.vertical, 16)
@@ -866,9 +866,9 @@ private struct NoteView: View {
                         }
                         .buttonStyle(.plain).help("Choose Note Icon")
                         .focusable(false)
-                        .popover(isPresented: Binding(get: { state.iconPickerNoteID == id }, set: { if !$0 { state.iconPickerNoteID = nil } })) {
-                            LazyVGrid(columns: Array(repeating: GridItem(.fixed(38)), count: 5), spacing: 8) {
-                                ForEach(NoteIcon.choices.filter { availableNoteIcon($0) == $0 }, id: \.self) { name in
+                        .popover(isPresented: Binding(get: { state.iconPickerNoteID == id }, set: { if !$0 { state.iconPickerNoteID = nil } }), arrowEdge: .leading) {
+                            LazyVGrid(columns: Array(repeating: GridItem(.fixed(38)), count: 7), spacing: 8) {
+                                ForEach(NoteIcon.choices, id: \.self) { name in
                                     Button {
                                         state.editNote(id) { $0.iconName = name }
                                         state.iconPickerNoteID = nil
@@ -888,7 +888,7 @@ private struct NoteView: View {
                             .focused($categoryFocused)
                             .onKeyPress(.tab) { state.focusNoteEditor(id); return .handled }
                         Spacer(minLength: 0)
-                        Button { state.confirmNoteDeletion = true } label: { Image(systemName: "trash") }
+                        Button { state.confirmNoteDeletion = true } label: { Image(systemName: AppSymbol.delete) }
                             .buttonStyle(.plain).foregroundStyle(.secondary).help("Delete Note").focusable(false)
                     }
                     MarkdownTextView(text: Binding(get: { state.note(id)?.contentMarkdown ?? "" }, set: { value in state.editNote(id) { $0.contentMarkdown = value } }), settings: state.workspace.settings, status: editorStatus, focusRequest: state.focusNoteEditorID == id ? state.editorFocusNonce : nil)
@@ -911,7 +911,7 @@ private struct NoteView: View {
                     Button("Delete Note", role: .destructive) { state.change { $0.notes.removeAll { $0.id == id } } }
                 } message: { Text("This cannot be undone.") }
             } else {
-                ContentUnavailableView("Note Unavailable", systemImage: "note.text")
+                ContentUnavailableView("Note Unavailable", systemImage: AppSymbol.unavailableNote)
             }
         }
     }

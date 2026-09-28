@@ -19,8 +19,43 @@ public enum DateDisplayMode: String, Codable, CaseIterable, Identifiable {
 
 public enum NoteIcon {
     public static let defaultName = "doc.text"
-    public static let choices = ["doc.text", "text.alignleft", "pencil", "lightbulb", "star", "bookmark", "book.closed", "folder", "briefcase", "person", "person.2", "bubble.left", "checklist", "hammer", "chevron.left.forwardslash.chevron.right", "terminal", "link", "heart", "house", "flag"]
-    public static func safeName(_ name: String) -> String { choices.contains(name) ? name : defaultName }
+    // Ordered for the seven-column picker. Move removed choices to legacyNames to preserve saved Notes.
+    public static let choices = [
+        "doc.text", "text.alignleft", "lightbulb", "star", "bookmark", "folder", "briefcase",
+        "person", "person.2", "bubble.left", "heart", "house", "flag", "link",
+        "book.closed", "book", "graduationcap", "terminal", "chevron.left.forwardslash.chevron.right", "chart.line.uptrend.xyaxis", "clock",
+        "bag", "cart", "gift", "fork.knife", "cup.and.saucer", "birthday.cake", "banknote",
+        "car", "bicycle", "airplane", "map", "suitcase", "globe", "building.2",
+        "figure.run", "dumbbell", "cross.case", "pills", "pawprint", "leaf", "hammer",
+        "wrench.and.screwdriver", "washer", "creditcard", "gamecontroller", "tv", "music.note", "camera"
+    ]
+    public static let legacyNames: Set<String> = ["checklist", "pencil"]
+    public static func safeName(_ name: String) -> String {
+        choices.contains(name) || legacyNames.contains(name) ? name : defaultName
+    }
+}
+
+// Symbols deliberately used for Passing By navigation, commands, and application states.
+public enum AppSymbol {
+    public static let dashboard = "square.grid.2x2"
+    public static let todos = "checklist"
+    public static let appointments = "calendar"
+    public static let help = "questionmark.circle"
+    public static let settings = "gearshape"
+    public static let locked = "lock.fill"
+    public static let add = "plus"
+    public static let delete = "trash"
+    public static let edit = "pencil"
+    public static let incomplete = "circle"
+    public static let complete = "checkmark.circle.fill"
+    public static let details = "info.circle"
+    public static let more = "ellipsis"
+    public static let error = "exclamationmark.triangle"
+    public static let unavailableNote = "note.text"
+    public static let reserved: Set<String> = [
+        dashboard, todos, appointments, help, settings, locked, add, delete, edit,
+        incomplete, complete, details, more, error, unavailableNote
+    ]
 }
 
 public enum RetentionPeriod: Int, Codable, CaseIterable, Identifiable {

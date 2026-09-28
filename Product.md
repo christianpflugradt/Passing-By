@@ -389,6 +389,8 @@ Every Note appears directly in the sidebar and opens in a dedicated editor scree
 
 Its compact header contains the selectable Note icon, editable title, category picker, and deletion action in one row above the editor. New Notes default to `doc.text`; existing Notes without an icon also use that symbol. Clicking the icon opens a compact picker of curated SF Symbols. The editor begins directly below the header and uses the remaining space.
 
+The picker offers 49 recognizable everyday symbols in a compact 7 × 7 grid. A Note icon expresses the user-defined subject or purpose of that Note. Symbols Passing By deliberately uses for its own navigation, actions, or application concepts must not also be selectable Note icons. If a symbol is removed from the curated choices later, existing Notes using it retain and display their saved icon; removal affects only new assignments.
+
 Creating a Note opens it and focuses its title. Keyboard focus proceeds from title to category to editor. Within the editor, Tab inserts indentation and Shift+Tab outdents where applicable without moving focus to surrounding controls. Escape does not unexpectedly leave the editor. `Shift+Cmd+T` returns focus to the Note title.
 
 ## 11.5 Deleting Notes

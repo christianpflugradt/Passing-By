@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import PassingByCore
 
@@ -129,6 +130,25 @@ func testNoteIconPersistenceAndLegacyFallback() throws {
     try JSONSerialization.data(withJSONObject: legacy).write(to: persistence.url)
     let loadedUnknown = try persistence.load()
     expect(loadedUnknown.notes[0].iconName == NoteIcon.defaultName, "unknown icon falls back safely")
+
+    for oldName in NoteIcon.legacyNames {
+        notes[0]["iconName"] = oldName
+        legacy["notes"] = notes
+        try JSONSerialization.data(withJSONObject: legacy).write(to: persistence.url)
+        let loaded = try persistence.load()
+        expect(loaded.notes[0].iconName == oldName, "removed Note icon survives reload")
+    }
+}
+
+func testCuratedNoteIcons() {
+    expect(NoteIcon.choices.count == 49, "Note picker contains exactly 49 icons")
+    expect(Set(NoteIcon.choices).count == NoteIcon.choices.count, "Note icons are unique")
+    expect(Set(NoteIcon.choices).isDisjoint(with: AppSymbol.reserved), "Note icons avoid application symbols")
+    expect(NoteIcon.choices.contains(NoteIcon.defaultName), "default Note icon remains selectable")
+    expect(NoteIcon.choices.contains("bag"), "shopping bag is selectable")
+    for name in NoteIcon.choices {
+        expect(NSImage(systemSymbolName: name, accessibilityDescription: nil) != nil, "Note icon \(name) renders")
+    }
 }
 
 func testManualNoteOrderAndPersistence() throws {
@@ -667,6 +687,7 @@ try testPersistenceRoundTrip()
 try testWorkspaceDirectoryMigration()
 try testWorkspaceMigrationFailureKeepsLegacyData()
 try testNoteIconPersistenceAndLegacyFallback()
+testCuratedNoteIcons()
 try testManualNoteOrderAndPersistence()
 try testLegacyNoteOrderMatchesPreviousDisplay()
 try testMissingFileIsOnlyEmptyWorkspaceCase()
