@@ -582,8 +582,8 @@ private struct PageHeader<Trailing: View>: View {
 
 private struct DashboardView: View {
     @ObservedObject var state: WorkspaceState
-    private var openTasks: [Task] { Array(state.workspace.tasks.filter { $0.completedAt == nil && state.workspace.matches($0.labelID) }.sorted { $0.createdAt < $1.createdAt }.prefix(4)) }
-    private var upcoming: [DateItem] { Array(state.workspace.upcomingDates().prefix(4)) }
+    private var openTasks: [Task] { Array(state.workspace.tasks.filter { $0.completedAt == nil && state.workspace.matches($0.labelID) }.sorted { $0.createdAt < $1.createdAt }.prefix(state.workspace.settings.maximumDashboardTasks)) }
+    private var upcoming: [DateItem] { Array(state.workspace.upcomingDates().prefix(state.workspace.settings.maximumDashboardAppointments)) }
     private var statisticsText: String {
         let days = state.workspace.daysPassed()
         let todos = state.workspace.completedTodoCount
@@ -1032,6 +1032,19 @@ private struct SettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
                 Text("Settings").font(.largeTitle.weight(.semibold))
+                VStack(alignment: .leading, spacing: 12) {
+                    sectionHeading("Dashboard")
+                    HStack(spacing: 12) {
+                        Text("Maximum To-dos shown")
+                        Text("\(settings.maximumDashboardTasks)").monospacedDigit()
+                        Stepper("Maximum To-dos shown", value: setting(\.maximumDashboardTasks), in: 1...10).labelsHidden()
+                    }
+                    HStack(spacing: 12) {
+                        Text("Maximum Appointments shown")
+                        Text("\(settings.maximumDashboardAppointments)").monospacedDigit()
+                        Stepper("Maximum Appointments shown", value: setting(\.maximumDashboardAppointments), in: 1...10).labelsHidden()
+                    }
+                }
                 VStack(alignment: .leading, spacing: 15) {
                     sectionHeading("Categories")
                     HStack(alignment: .top, spacing: 24) {

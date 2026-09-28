@@ -836,9 +836,13 @@ No explicit Save action should be required.
 
 # 21. Settings
 
-Settings contain five vertical sections: Categories, To-dos, Appointments, Notes, and Security. Controls remain inline in one calm, native screen. Keyboard shortcut documentation belongs on Help.
+Settings contain six vertical sections: Dashboard, Categories, To-dos, Appointments, Notes, and Security. Controls remain inline in one calm, native screen. Keyboard shortcut documentation belongs on Help.
 
-## 21.1 Categories
+## 21.1 Dashboard
+
+Users can configure the maximum number of To-dos and Appointments shown on Dashboard independently, from 1 to 10. Both default to 4. These limits affect only Dashboard presentation, after its existing filtering and ordering rules; they do not change the full To-dos or Appointments views, stored data, retention, or Category filtering semantics. Changes take effect immediately.
+
+## 21.2 Categories
 
 Category management uses a list of Categories and an editor for the selected Category. Users can create, rename, assign a color, and delete Categories.
 
@@ -848,21 +852,21 @@ One optional Scheduled Default Category may override the fallback Default Catego
 
 The override is resolved only when a new item is created, using the current local creation time. An Appointment's own date does not affect its initial Category. Existing items are never recategorized when time passes. Deleting a referenced Category safely clears its default reference; deleting a scheduled Category also disables that override.
 
-## 21.2 To-dos
+## 21.3 To-dos
 
 Users can configure completed To-do retention.
 
-## 21.3 Appointments
+## 21.4 Appointments
 
 Users can configure passed Appointment retention, the global maximum upcoming Appointments per Category, and the future time horizon. This section also provides a simple TSV bulk import.
 
 Each non-empty TSV line contains `DD.MM.YYYY`, a required title, and an optional description, separated by tabs. An empty description may be omitted or represented by a trailing tab. The user selects one existing Category or Uncategorized for the whole import. The app previews all parsed Appointments and reports invalid rows before confirmation; invalid or empty files cannot be imported. Confirmed imports append ordinary Appointments, with no automatic duplicate detection or merging. Import is one-time ingestion, without synchronization with the TSV file.
 
-## 21.4 Notes
+## 21.5 Notes
 
 Users can configure line numbers, indent width, spell checking, automatic correction, Smart Quotes, and Smart Dashes. Line numbers and spell checking default on. Indent width defaults to 4 spaces. Automatic correction, Smart Quotes, and Smart Dashes default off.
 
-## 21.5 Security
+## 21.6 Security
 
 Optional global App Lock protects app content from casual exposure. It is off by default and uses native macOS authentication, including Touch ID when available through the system. With App Lock enabled, every fresh launch starts locked and no private app content is visible until authentication succeeds. `Shift+Cmd+L` and Lock Now in Settings lock the app immediately.
 
@@ -911,7 +915,7 @@ All content creation occurs through the main application UI.
 
 Dashboard is the deliberately minimal "what matters now" starting view.
 
-In Version 1 it surfaces up to four open To-dos and up to four upcoming Appointments under the current global category context. It does not surface recent Notes.
+In Version 1 it surfaces open To-dos and upcoming Appointments under the current global category context, up to the respective maximums configured in Settings. It does not surface recent Notes.
 
 To-dos appear in the left column and Appointments in the right. The columns form one balanced composition with aligned headings, comfortable spacing, and a restrained maximum content width. They are sections, not cards or widgets. To-do rows contain only a completion control, an applicable Category color indicator, and the title. Appointment rows put useful relative time first, keep the absolute date visible but secondary, then show the title on a second line; they also show an applicable Category color indicator. For example, `Today · 27 Sep` above `New Date`.
 
@@ -1128,7 +1132,8 @@ A reviewer should explicitly verify all of the following.
 ## Product structure
 
 - [ ] Application has Dashboard, To-dos, Appointments, Help, individual Notes, and Settings in a two-level sidebar and content layout.
-- [ ] Dashboard shows no more than four open To-dos in the left column and four upcoming Appointments in the right, without recent Notes or analytics widgets.
+- [ ] Dashboard shows no more than the configured maximum of open To-dos in the left column and upcoming Appointments in the right, without recent Notes or analytics widgets.
+- [ ] Dashboard maximums are independently configurable from 1 to 10 in Settings, default to 4, and apply after existing relevance, filtering, and ordering rules without changing full views or stored items.
 - [ ] Dashboard shows only Days Passed, To-dos Completed, and Appointments Passed in a restrained status bar; the totals survive retention and remain hidden while locked.
 - [ ] Dashboard Appointment rows show relative time prominently and the absolute date secondarily.
 - [ ] Each Note opens directly from the sidebar in the main content area.

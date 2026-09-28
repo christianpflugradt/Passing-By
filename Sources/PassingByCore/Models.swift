@@ -95,6 +95,12 @@ public struct AppSettings: Codable, Hashable {
     public var dateDisplayMode: DateDisplayMode = .chronological
     public var taskRetention: RetentionPeriod = .thirty
     public var dateRetention: RetentionPeriod = .thirty
+    public var maximumDashboardTasks = 4 {
+        didSet { if !(1...10).contains(maximumDashboardTasks) { maximumDashboardTasks = 4 } }
+    }
+    public var maximumDashboardAppointments = 4 {
+        didSet { if !(1...10).contains(maximumDashboardAppointments) { maximumDashboardAppointments = 4 } }
+    }
     public var maximumUpcomingDatesPerLabel = 5
     public var upcomingHorizonDays = 14 {
         didSet { if !(1...365).contains(upcomingHorizonDays) { upcomingHorizonDays = 14 } }
@@ -115,9 +121,16 @@ public struct AppSettings: Codable, Hashable {
     public var appLockEnabled = false
     public var lockWhenInactive = false
     public var inactivityMinutes = 5
-    public init(labelContext: LabelContext = .all, dateDisplayMode: DateDisplayMode = .chronological, taskRetention: RetentionPeriod = .thirty, dateRetention: RetentionPeriod = .thirty, maximumUpcomingDatesPerLabel: Int = 5, upcomingHorizonDays: Int = 14) { self.labelContext = labelContext; self.dateDisplayMode = dateDisplayMode; self.taskRetention = taskRetention; self.dateRetention = dateRetention; self.maximumUpcomingDatesPerLabel = maximumUpcomingDatesPerLabel; self.upcomingHorizonDays = (1...365).contains(upcomingHorizonDays) ? upcomingHorizonDays : 14 }
+    public init(labelContext: LabelContext = .all, dateDisplayMode: DateDisplayMode = .chronological, taskRetention: RetentionPeriod = .thirty, dateRetention: RetentionPeriod = .thirty, maximumUpcomingDatesPerLabel: Int = 5, upcomingHorizonDays: Int = 14, maximumDashboardTasks: Int = 4, maximumDashboardAppointments: Int = 4) {
+        self.labelContext = labelContext; self.dateDisplayMode = dateDisplayMode; self.taskRetention = taskRetention; self.dateRetention = dateRetention
+        self.maximumUpcomingDatesPerLabel = maximumUpcomingDatesPerLabel
+        self.upcomingHorizonDays = (1...365).contains(upcomingHorizonDays) ? upcomingHorizonDays : 14
+        self.maximumDashboardTasks = (1...10).contains(maximumDashboardTasks) ? maximumDashboardTasks : 4
+        self.maximumDashboardAppointments = (1...10).contains(maximumDashboardAppointments) ? maximumDashboardAppointments : 4
+    }
     private enum CodingKeys: String, CodingKey {
         case labelContext, dateDisplayMode, taskRetention, dateRetention, maximumUpcomingDatesPerLabel, upcomingHorizonDays
+        case maximumDashboardTasks, maximumDashboardAppointments
         case defaultLabelID, scheduledDefaultEnabled, scheduledCategoryConfigured, scheduledLabelID, scheduledWeekdays, scheduledStartMinute, scheduledEndMinute
         case showLineNumbers, indentWidth, checkSpelling, automaticCorrection, smartQuotes, smartDashes
         case appLockEnabled, lockWhenInactive, inactivityMinutes
@@ -128,6 +141,10 @@ public struct AppSettings: Codable, Hashable {
         dateDisplayMode = try values.decodeIfPresent(DateDisplayMode.self, forKey: .dateDisplayMode) ?? .chronological
         taskRetention = try values.decodeIfPresent(RetentionPeriod.self, forKey: .taskRetention) ?? .thirty
         dateRetention = try values.decodeIfPresent(RetentionPeriod.self, forKey: .dateRetention) ?? .thirty
+        let dashboardTasks = try values.decodeIfPresent(Int.self, forKey: .maximumDashboardTasks) ?? 4
+        maximumDashboardTasks = (1...10).contains(dashboardTasks) ? dashboardTasks : 4
+        let dashboardAppointments = try values.decodeIfPresent(Int.self, forKey: .maximumDashboardAppointments) ?? 4
+        maximumDashboardAppointments = (1...10).contains(dashboardAppointments) ? dashboardAppointments : 4
         maximumUpcomingDatesPerLabel = try values.decodeIfPresent(Int.self, forKey: .maximumUpcomingDatesPerLabel) ?? 5
         let horizon = try values.decodeIfPresent(Int.self, forKey: .upcomingHorizonDays) ?? 14
         upcomingHorizonDays = (1...365).contains(horizon) ? horizon : 14

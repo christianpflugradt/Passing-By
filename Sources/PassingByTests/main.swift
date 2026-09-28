@@ -513,12 +513,14 @@ func testSettingsPersistenceAndLegacyDefaults() throws {
     workspace.settings.automaticCorrection = true
     workspace.settings.smartQuotes = true
     workspace.settings.smartDashes = true
+    workspace.settings.maximumDashboardTasks = 1
+    workspace.settings.maximumDashboardAppointments = 10
     try persistence.save(workspace)
     let roundTrip = try persistence.load()
     expect(roundTrip == workspace, "new Settings persist round trip")
     var legacy = try JSONSerialization.jsonObject(with: Data(contentsOf: persistence.url)) as! [String: Any]
     var oldSettings = legacy["settings"] as! [String: Any]
-    for key in ["defaultLabelID", "scheduledDefaultEnabled", "scheduledCategoryConfigured", "scheduledLabelID", "scheduledWeekdays", "scheduledStartMinute", "scheduledEndMinute", "showLineNumbers", "indentWidth", "checkSpelling", "automaticCorrection", "smartQuotes", "smartDashes", "appLockEnabled", "lockWhenInactive", "inactivityMinutes"] { oldSettings.removeValue(forKey: key) }
+    for key in ["defaultLabelID", "scheduledDefaultEnabled", "scheduledCategoryConfigured", "scheduledLabelID", "scheduledWeekdays", "scheduledStartMinute", "scheduledEndMinute", "showLineNumbers", "indentWidth", "checkSpelling", "automaticCorrection", "smartQuotes", "smartDashes", "appLockEnabled", "lockWhenInactive", "inactivityMinutes", "maximumDashboardTasks", "maximumDashboardAppointments"] { oldSettings.removeValue(forKey: key) }
     legacy["settings"] = oldSettings
     try JSONSerialization.data(withJSONObject: legacy).write(to: persistence.url)
     let loaded = try persistence.load()
@@ -529,6 +531,21 @@ func testSettingsPersistenceAndLegacyDefaults() throws {
     expect(defaults.showLineNumbers && defaults.indentWidth == 4 && defaults.checkSpelling, "old workspace has Note editor defaults")
     expect(!defaults.automaticCorrection && !defaults.smartQuotes && !defaults.smartDashes, "old workspace preserves Markdown source defaults")
     expect(!defaults.appLockEnabled && !defaults.lockWhenInactive && defaults.inactivityMinutes == 5, "old workspace has App Lock off and a five minute default")
+    expect(defaults.maximumDashboardTasks == 4 && defaults.maximumDashboardAppointments == 4, "old workspace has four-item Dashboard defaults")
+    for limit in [1, 10] {
+        let settings = AppSettings(maximumDashboardTasks: limit, maximumDashboardAppointments: limit)
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(settings))
+        expect(decoded.maximumDashboardTasks == limit && decoded.maximumDashboardAppointments == limit, "supported Dashboard limit \(limit) persists")
+    }
+    for invalidLimit in [-1, 0, 11] {
+        oldSettings["maximumDashboardTasks"] = invalidLimit
+        oldSettings["maximumDashboardAppointments"] = invalidLimit
+        legacy["settings"] = oldSettings
+        let invalid = try JSONDecoder().decode(Workspace.self, from: JSONSerialization.data(withJSONObject: legacy))
+        expect(invalid.settings.maximumDashboardTasks == 4 && invalid.settings.maximumDashboardAppointments == 4, "invalid Dashboard limit falls back to four")
+    }
+    oldSettings.removeValue(forKey: "maximumDashboardTasks")
+    oldSettings.removeValue(forKey: "maximumDashboardAppointments")
     for width in [2, 4, 8] {
         var settings = defaults
         settings.indentWidth = width
