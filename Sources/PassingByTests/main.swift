@@ -563,6 +563,85 @@ func testSecuritySettingsPersistenceAndValidation() throws {
     }
 }
 
+func testLifetimeStatistics() {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(identifier: "Europe/Berlin")!
+    let start = calendar.date(from: DateComponents(year: 2026, month: 9, day: 28, hour: 23, minute: 50))!
+    let nextDay = calendar.date(from: DateComponents(year: 2026, month: 9, day: 29, hour: 0, minute: 10))!
+    var workspace = Workspace(statisticsStartedAt: start)
+    expect(workspace.daysPassed(now: start, calendar: calendar) == 1, "first calendar day counts as one")
+    expect(workspace.daysPassed(now: nextDay, calendar: calendar) == 2, "next calendar day counts as two even before 24 hours")
+
+    workspace.tasks = [Task(title: "Complete")]
+    workspace.tasks[0].completedAt = start
+    expect(workspace.completedTodoCount == 1, "completion contributes")
+    workspace.tasks[0].completedAt = nil
+    expect(workspace.completedTodoCount == 0, "restoration removes contribution")
+    workspace.tasks[0].completedAt = start
+    expect(workspace.completedTodoCount == 1, "recompletion contributes once")
+
+    let today = calendar.startOfDay(for: nextDay)
+    let yesterday = calendar.date(byAdding: .day, value: -1, to: today)!
+    let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
+    workspace.dates = [DateItem(title: "Passed", date: yesterday), DateItem(title: "Today", date: today), DateItem(title: "Future", date: tomorrow)]
+    expect(workspace.passedAppointmentCount(now: nextDay, calendar: calendar) == 1, "only passed Appointment contributes")
+    workspace.dates[0].date = tomorrow
+    expect(workspace.passedAppointmentCount(now: nextDay, calendar: calendar) == 0, "rescheduling a retained Appointment to the future removes its contribution")
+    workspace.dates[0].date = yesterday
+
+    var manuallyDeleted = workspace
+    manuallyDeleted.tasks.removeAll()
+    manuallyDeleted.dates.removeAll()
+    expect(manuallyDeleted.completedTodoCount == 0 && manuallyDeleted.passedAppointmentCount(now: nextDay, calendar: calendar) == 0, "explicit deletion removes retained contributions")
+
+    workspace.settings.taskRetention = .seven
+    workspace.settings.dateRetention = .seven
+    let purgeDay = calendar.date(byAdding: .day, value: 10, to: nextDay)!
+    let completedBeforePurge = workspace.completedTodoCount
+    let passedBeforePurge = workspace.passedAppointmentCount(now: purgeDay, calendar: calendar)
+    workspace.purgeExpired(now: purgeDay, calendar: calendar)
+    expect(workspace.tasks.isEmpty && workspace.dates.isEmpty, "expired items are purged")
+    expect(workspace.completedTodoCount == completedBeforePurge, "To-do purge preserves total")
+    expect(workspace.passedAppointmentCount(now: purgeDay, calendar: calendar) == passedBeforePurge, "Appointment purge preserves total")
+    workspace.purgeExpired(now: purgeDay, calendar: calendar)
+    expect(workspace.completedTodoCount == completedBeforePurge && workspace.passedAppointmentCount(now: purgeDay, calendar: calendar) == passedBeforePurge, "repeated purge does not double-count")
+}
+
+func testLifetimeStatisticsPersistenceAndLegacyDefaults() throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let persistence = WorkspacePersistence(url: directory.appendingPathComponent("workspace.json"))
+    var old = Workspace(tasks: [Task(title: "Retained", completedAt: Date(timeIntervalSinceReferenceDate: 100))])
+    try persistence.save(old)
+    var encoded = try JSONSerialization.jsonObject(with: Data(contentsOf: persistence.url)) as! [String: Any]
+    encoded.removeValue(forKey: "statisticsStartedAt")
+    encoded.removeValue(forKey: "historicalCompletedTodoCount")
+    encoded.removeValue(forKey: "historicalPassedAppointmentCount")
+    try JSONSerialization.data(withJSONObject: encoded).write(to: persistence.url)
+    let legacy = try persistence.load()
+    expect(legacy.statisticsStartedAt == nil && legacy.historicalCompletedTodoCount == 0 && legacy.historicalPassedAppointmentCount == 0, "old Workspace gets safe statistics defaults")
+    expect(legacy.completedTodoCount == 1, "retained completion contributes to legacy Workspace")
+
+    old = legacy
+    let started = Date(timeIntervalSinceReferenceDate: 1_000_000)
+    old.statisticsStartedAt = started
+    old.historicalCompletedTodoCount = 12
+    old.historicalPassedAppointmentCount = 7
+    try persistence.save(old)
+    let loaded = try persistence.load()
+    expect(loaded.statisticsStartedAt == started && loaded.historicalCompletedTodoCount == 12 && loaded.historicalPassedAppointmentCount == 7, "statistics fields round trip")
+
+    // Startup initializes a missing date once and persists it with the Workspace.
+    encoded = try JSONSerialization.jsonObject(with: Data(contentsOf: persistence.url)) as! [String: Any]
+    encoded.removeValue(forKey: "statisticsStartedAt")
+    try JSONSerialization.data(withJSONObject: encoded).write(to: persistence.url)
+    let firstStore = try AppStore(persistence: persistence)
+    let firstStart = firstStore.workspace.statisticsStartedAt
+    expect(firstStart != nil, "startup sets statistics start date")
+    let secondStore = try AppStore(persistence: persistence)
+    expect(secondStore.workspace.statisticsStartedAt == firstStart, "startup never resets persisted statistics start date")
+}
+
 testDeletingLabelUnlabelsEveryItemAndResetsFilter()
 testRetentionNeverDeletesOpenTasksOrFutureDates()
 testRetentionRemovesOnlyExpiredCompletedAndPassedItems()
@@ -586,4 +665,6 @@ testNoteEditorStatus()
 testDefaultCategoryAndScheduleAtCreation()
 try testSettingsPersistenceAndLegacyDefaults()
 try testSecuritySettingsPersistenceAndValidation()
+testLifetimeStatistics()
+try testLifetimeStatisticsPersistenceAndLegacyDefaults()
 print("PassingByTests: all tests passed")

@@ -140,7 +140,10 @@ public final class AppStore {
     public init(persistence: WorkspacePersistence? = nil) throws {
         self.persistence = try persistence ?? .standard()
         self.workspace = try self.persistence.load()
-        cleanUp()
+        let old = workspace
+        if workspace.statisticsStartedAt == nil { workspace.statisticsStartedAt = Date() }
+        workspace.purgeExpired()
+        if workspace != old { save() }
     }
 
     public func change(_ mutation: (inout Workspace) -> Void) {

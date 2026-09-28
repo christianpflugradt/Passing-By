@@ -171,12 +171,20 @@ public struct Workspace: Codable, Equatable {
     public var tasks: [Task] = []
     public var dates: [DateItem] = []
     public var settings = AppSettings()
+    public var statisticsStartedAt: Date?
+    public var historicalCompletedTodoCount = 0
+    public var historicalPassedAppointmentCount = 0
     // Version 1 stores the user-defined order directly in `notes`. Older files
     // displayed Notes by creation time, regardless of their array order.
     private var noteOrderVersion = 1
-    public init(labels: [Label] = [], notes: [Note] = [], tasks: [Task] = [], dates: [DateItem] = [], settings: AppSettings = AppSettings()) { self.labels = labels; self.notes = notes; self.tasks = tasks; self.dates = dates; self.settings = settings }
+    public init(labels: [Label] = [], notes: [Note] = [], tasks: [Task] = [], dates: [DateItem] = [], settings: AppSettings = AppSettings(), statisticsStartedAt: Date? = nil, historicalCompletedTodoCount: Int = 0, historicalPassedAppointmentCount: Int = 0) {
+        self.labels = labels; self.notes = notes; self.tasks = tasks; self.dates = dates; self.settings = settings
+        self.statisticsStartedAt = statisticsStartedAt
+        self.historicalCompletedTodoCount = historicalCompletedTodoCount
+        self.historicalPassedAppointmentCount = historicalPassedAppointmentCount
+    }
 
-    private enum CodingKeys: String, CodingKey { case labels, notes, tasks, dates, settings, noteOrderVersion }
+    private enum CodingKeys: String, CodingKey { case labels, notes, tasks, dates, settings, noteOrderVersion, statisticsStartedAt, historicalCompletedTodoCount, historicalPassedAppointmentCount }
     public init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         labels = try values.decode([Label].self, forKey: .labels)
@@ -184,6 +192,9 @@ public struct Workspace: Codable, Equatable {
         tasks = try values.decode([Task].self, forKey: .tasks)
         dates = try values.decode([DateItem].self, forKey: .dates)
         settings = try values.decode(AppSettings.self, forKey: .settings)
+        statisticsStartedAt = try values.decodeIfPresent(Date.self, forKey: .statisticsStartedAt)
+        historicalCompletedTodoCount = try values.decodeIfPresent(Int.self, forKey: .historicalCompletedTodoCount) ?? 0
+        historicalPassedAppointmentCount = try values.decodeIfPresent(Int.self, forKey: .historicalPassedAppointmentCount) ?? 0
         if try values.decodeIfPresent(Int.self, forKey: .noteOrderVersion) == nil {
             notes = notes.enumerated().sorted {
                 $0.element.createdAt == $1.element.createdAt ? $0.offset < $1.offset : $0.element.createdAt < $1.element.createdAt
@@ -240,6 +251,20 @@ public struct Workspace: Codable, Equatable {
         item.date < calendar.startOfDay(for: now)
     }
 
+    public func daysPassed(now: Date = Date(), calendar: Calendar = .current) -> Int {
+        guard let statisticsStartedAt else { return 0 }
+        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: statisticsStartedAt), to: calendar.startOfDay(for: now)).day ?? 0
+        return max(1, days + 1)
+    }
+
+    public var completedTodoCount: Int {
+        historicalCompletedTodoCount + tasks.count { $0.completedAt != nil }
+    }
+
+    public func passedAppointmentCount(now: Date = Date(), calendar: Calendar = .current) -> Int {
+        historicalPassedAppointmentCount + dates.count { isPassed($0, calendar: calendar, now: now) }
+    }
+
     public func matchingDates(showPast: Bool, calendar: Calendar = .current, now: Date = Date()) -> [DateItem] {
         dates.filter { matches($0.labelID) && (showPast || !isPassed($0, calendar: calendar, now: now)) }
             .sorted { $0.date < $1.date }
@@ -282,19 +307,25 @@ public struct Workspace: Codable, Equatable {
         let today = calendar.startOfDay(for: now)
         if settings.taskRetention != .never {
             let days = settings.taskRetention.rawValue
+            var removed = 0
             tasks.removeAll { task in
                 guard let completed = task.completedAt,
                       let expiry = calendar.date(byAdding: .day, value: days, to: completed) else { return false }
-                return now > expiry
+                if now > expiry { removed += 1; return true }
+                return false
             }
+            historicalCompletedTodoCount += removed
         }
         if settings.dateRetention != .never {
             let days = settings.dateRetention.rawValue
+            var removed = 0
             dates.removeAll { item in
                 guard item.date < today,
                       let expiry = calendar.date(byAdding: .day, value: days, to: calendar.startOfDay(for: item.date)) else { return false }
-                return today > expiry
+                if today > expiry { removed += 1; return true }
+                return false
             }
+            historicalPassedAppointmentCount += removed
         }
     }
 }

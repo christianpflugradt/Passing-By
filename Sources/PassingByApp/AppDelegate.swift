@@ -584,7 +584,14 @@ private struct DashboardView: View {
     @ObservedObject var state: WorkspaceState
     private var openTasks: [Task] { Array(state.workspace.tasks.filter { $0.completedAt == nil && state.workspace.matches($0.labelID) }.sorted { $0.createdAt < $1.createdAt }.prefix(4)) }
     private var upcoming: [DateItem] { Array(state.workspace.upcomingDates().prefix(4)) }
+    private var statisticsText: String {
+        let days = state.workspace.daysPassed()
+        let todos = state.workspace.completedTodoCount
+        let appointments = state.workspace.passedAppointmentCount()
+        return "\(days.formatted()) \(days == 1 ? "Day" : "Days") Passed · \(todos.formatted()) \(todos == 1 ? "To-do" : "To-dos") Completed · \(appointments.formatted()) \(appointments == 1 ? "Appointment" : "Appointments") Passed"
+    }
     var body: some View {
+        VStack(spacing: 0) {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 PageHeader(title: "Dashboard") { LabelFilter(state: state) }
@@ -642,6 +649,16 @@ private struct DashboardView: View {
             .padding(.horizontal, 34).padding(.vertical, 28)
             .frame(maxWidth: .infinity, alignment: .center)
         }
+        Text(statisticsText)
+            .font(.system(size: 11))
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: 900, alignment: .leading)
+            .padding(.horizontal, 34)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .frame(height: 35)
+            .overlay(alignment: .top) { Rectangle().fill(Color(nsColor: .separatorColor)).frame(height: 1) }
+        }
+        .onAppear { state.refreshIfDayChanged() }
     }
 }
 

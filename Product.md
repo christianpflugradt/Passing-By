@@ -915,7 +915,7 @@ In Version 1 it surfaces up to four open To-dos and up to four upcoming Appointm
 
 To-dos appear in the left column and Appointments in the right. The columns form one balanced composition with aligned headings, comfortable spacing, and a restrained maximum content width. They are sections, not cards or widgets. To-do rows contain only a completion control, an applicable Category color indicator, and the title. Appointment rows put useful relative time first, keep the absolute date visible but secondary, then show the title on a second line; they also show an applicable Category color indicator. For example, `Today · 27 Sep` above `New Date`.
 
-It is a short path to current items, not an analytics or widget dashboard. It must not introduce cards, counters, metrics, charts, statistics, or other dense overview furniture. To-dos, Appointments, and individual Notes remain directly accessible from the sidebar.
+It is a short path to current items, not an analytics or widget dashboard. A restrained status bar at the bottom shows exactly three lifetime values: Days Passed, To-dos Completed, and Appointments Passed. Days Passed counts local calendar days inclusively from the first persisted statistics start date. Completed To-dos and passed Appointments contribute while retained, and their lifetime totals survive normal retention. Explicit deletion removes an item from the lifetime total if it has not already been removed by retention. These values describe usage history rather than productivity. The Dashboard must not introduce cards, charts, trends, scores, or other dense overview furniture. To-dos, Appointments, and individual Notes remain directly accessible from the sidebar.
 
 ---
 
@@ -1056,7 +1056,7 @@ Version 1 must not implement:
 - attachments
 - WYSIWYG Markdown
 - Markdown preview
-- statistics
+- statistics beyond the three Dashboard lifetime values
 - productivity scores
 - gamification
 - Kanban boards
@@ -1129,6 +1129,7 @@ A reviewer should explicitly verify all of the following.
 
 - [ ] Application has Dashboard, To-dos, Appointments, Help, individual Notes, and Settings in a two-level sidebar and content layout.
 - [ ] Dashboard shows no more than four open To-dos in the left column and four upcoming Appointments in the right, without recent Notes or analytics widgets.
+- [ ] Dashboard shows only Days Passed, To-dos Completed, and Appointments Passed in a restrained status bar; the totals survive retention and remain hidden while locked.
 - [ ] Dashboard Appointment rows show relative time prominently and the absolute date secondarily.
 - [ ] Each Note opens directly from the sidebar in the main content area.
 - [ ] The compact icon sidebar has tooltips, Notes do not collapse, and Settings is anchored at the bottom.
