@@ -109,6 +109,12 @@ Do not create planning documents, architecture documents, ADRs, progress logs, o
 
 Keep `README.md` focused on practical repository usage such as building, running, and testing the application.
 
+## Git Workflow
+
+- Never use `git stash` in any form.
+- Work only on `main`. Do not create, check out, or commit on another branch.
+- Commit completed work on `main` and push `main` to `origin`.
+
 ## Completion
 
 Before considering a task complete:
@@ -121,4 +127,4 @@ Before considering a task complete:
 
 For substantial product work, perform a final review against the relevant `Product.md` verification criteria and report any remaining deviations explicitly.
 
-After completing a task, commit its changes using the repository's commit-message convention and push the branch to its upstream. Report the commit and push result; if the push fails, report the failure without discarding the commit.
+After completing a task, commit its changes using the repository's commit-message convention and push `main` to `origin`. Report the commit and push result; if the push fails, report the failure without discarding the commit.
