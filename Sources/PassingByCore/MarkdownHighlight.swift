@@ -16,9 +16,15 @@ public enum MarkdownHighlight {
         public let url: URL
     }
 
+    public struct Checkbox: Equatable {
+        public let range: NSRange
+        public let checked: Bool
+    }
+
     public struct Result {
         public let spans: [Span]
         public let links: [Link]
+        public let checkboxes: [Checkbox]
     }
 
     public static func parse(_ source: String) -> Result {
@@ -26,6 +32,7 @@ public enum MarkdownHighlight {
         let count = chars.count
         var spans: [Span] = []
         var links: [Link] = []
+        var checkboxes: [Checkbox] = []
         var protected = Array(repeating: false, count: count)
         func add(_ start: Int, _ end: Int, _ style: Style) {
             if start < end { spans.append(Span(NSRange(location: start, length: end - start), style)) }
@@ -91,7 +98,11 @@ public enum MarkdownHighlight {
                 else { content += 2 }
             }
             if content > marker {
-                if content + 3 < end && chars[content] == 91 && [UInt16(32), 120, 88].contains(chars[content + 1]) && chars[content + 2] == 93 && chars[content + 3] == 32 { content += 4 }
+                if content + 2 < end && chars[content] == 91 && [UInt16(32), 120, 88].contains(chars[content + 1]) && chars[content + 2] == 93 &&
+                    (content + 3 == end || chars[content + 3] == 32) {
+                    checkboxes.append(Checkbox(range: NSRange(location: content, length: 3), checked: chars[content + 1] != 32))
+                    content += content + 3 == end ? 3 : 4
+                }
                 add(marker, content, .syntax)
             }
             var i = content
@@ -156,7 +167,7 @@ public enum MarkdownHighlight {
             }
             line = next
         }
-        return Result(spans: spans, links: links)
+        return Result(spans: spans, links: links, checkboxes: checkboxes)
     }
 
     private static func isWord(_ c: UInt16) -> Bool {

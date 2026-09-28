@@ -1390,10 +1390,16 @@ private struct MarkdownTextView: NSViewRepresentable {
                 case .strike: storage.addAttribute(.strikethroughStyle, value: NSUnderlineStyle.single.rawValue, range: span.range)
                 }
             }
+            for checkbox in parsed.checkboxes {
+                storage.addAttribute(.foregroundColor, value: NSColor.clear, range: checkbox.range)
+            }
             storage.endEditing()
             if editor.selectedRanges != selection { editor.selectedRanges = selection }
             editor.typingAttributes = [.font: NSFont.monospacedSystemFont(ofSize: 13, weight: .regular), .foregroundColor: NSColor.labelColor]
-            (editor as? NoteEditorTextView)?.markdownLinks = parsed.links
+            if let noteEditor = editor as? NoteEditorTextView {
+                noteEditor.markdownLinks = parsed.links
+                noteEditor.markdownCheckboxes = parsed.checkboxes
+            }
         }
         private func addTrait(_ trait: NSFontTraitMask, to range: NSRange, storage: NSTextStorage) {
             var changes: [(NSFont, NSRange)] = []
@@ -1482,8 +1488,67 @@ private final class NoteLineNumberRuler: NSRulerView {
 
 private final class NoteEditorTextView: NSTextView {
     var markdownLinks: [MarkdownHighlight.Link] = []
+    var markdownCheckboxes: [MarkdownHighlight.Checkbox] = [] {
+        didSet {
+            needsDisplay = true
+            window?.invalidateCursorRects(for: self)
+        }
+    }
     var indentWidth = 4
+    override func resetCursorRects() {
+        super.resetCursorRects()
+        for checkbox in markdownCheckboxes {
+            if let rect = checkboxRect(for: checkbox) { addCursorRect(rect, cursor: .pointingHand) }
+        }
+    }
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        for checkbox in markdownCheckboxes {
+            guard let rect = checkboxRect(for: checkbox), rect.intersects(dirtyRect) else { continue }
+            let size: CGFloat = 13
+            let square = NSRect(x: rect.midX - size / 2, y: rect.midY - size / 2, width: size, height: size)
+            let outline = NSBezierPath(roundedRect: square, xRadius: 3, yRadius: 3)
+            (checkbox.checked ? NSColor.controlAccentColor : NSColor.secondaryLabelColor).setStroke()
+            outline.lineWidth = 1.5
+            if checkbox.checked {
+                NSColor.controlAccentColor.setFill()
+                outline.fill()
+            }
+            outline.stroke()
+            if checkbox.checked {
+                let check = NSBezierPath()
+                let bottom = isFlipped ? square.maxY - 3 : square.minY + 3
+                let top = isFlipped ? square.minY + 3 : square.maxY - 3
+                check.move(to: NSPoint(x: square.minX + 3, y: square.midY))
+                check.line(to: NSPoint(x: square.minX + 5.5, y: bottom))
+                check.line(to: NSPoint(x: square.maxX - 2.5, y: top))
+                check.lineWidth = 1.5
+                check.lineCapStyle = .round
+                check.lineJoinStyle = .round
+                NSColor.selectedControlTextColor.setStroke()
+                check.stroke()
+            }
+        }
+    }
+    private func checkboxRect(for checkbox: MarkdownHighlight.Checkbox) -> NSRect? {
+        guard let manager = layoutManager, let container = textContainer,
+              let storage = textStorage, NSMaxRange(checkbox.range) <= storage.length else { return nil }
+        let glyphs = manager.glyphRange(forCharacterRange: checkbox.range, actualCharacterRange: nil)
+        let rect = manager.boundingRect(forGlyphRange: glyphs, in: container)
+        return rect.offsetBy(dx: textContainerOrigin.x, dy: textContainerOrigin.y)
+    }
     override func mouseDown(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        if !event.modifierFlags.contains(.command), event.clickCount == 1,
+           let checkbox = markdownCheckboxes.first(where: { checkboxRect(for: $0)?.contains(point) == true }) {
+            let valueRange = NSRange(location: checkbox.range.location + 1, length: 1)
+            let replacement = checkbox.checked ? " " : "x"
+            window?.makeFirstResponder(self)
+            let selection = selectedRanges
+            insertText(replacement, replacementRange: valueRange)
+            if selectedRanges != selection { selectedRanges = selection }
+            return
+        }
         if event.modifierFlags.contains(.command), event.clickCount == 1,
            let manager = layoutManager, let container = textContainer, manager.numberOfGlyphs > 0 {
             let point = convert(event.locationInWindow, from: nil)

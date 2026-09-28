@@ -415,6 +415,12 @@ func testMarkdownSourceHighlighting() {
     for marker in ["- ", "* ", "+ ", "1. ", "2. ", "- [ ] ", "- [x] ", "- [X] ", "> ", ">> "] {
         expect(parsed.spans.contains { $0.style == .syntax && ns.substring(with: $0.range) == marker }, "structural marker \(marker)")
     }
+    expect(parsed.checkboxes.map { ns.substring(with: $0.range) } == ["[ ]", "[x]", "[X]"], "task markers have exact source ranges")
+    expect(parsed.checkboxes.map(\.checked) == [false, true, true], "task marker state is preserved")
+    let emptyTask = MarkdownHighlight.parse("- [ ]\n1. [x]")
+    expect(emptyTask.checkboxes.map(\.checked) == [false, true], "tasks without descriptions are checkboxes")
+    let ordinaryBrackets = MarkdownHighlight.parse("[ ] plain text\n- [x]task\n```\n- [ ] code\n```")
+    expect(ordinaryBrackets.checkboxes.isEmpty, "only complete list task markers outside code become checkboxes")
     expect(has(.linkText, "OpenAI") && has(.linkURL, "https://openai.com") && parsed.links.count == 3, "links retain visible text and URL")
     expect(has(.code, "inline code") && has(.code, "code block"), "inline and fenced code")
     expect(!parsed.spans.contains { $0.style == .code && NSLocationInRange(range("Prose after").location, $0.range) }, "closing fence ends code")

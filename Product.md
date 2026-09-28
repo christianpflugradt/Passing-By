@@ -417,9 +417,9 @@ The application must not use WYSIWYG editing.
 
 The application must not automatically render Markdown into rich text while editing.
 
-The Markdown syntax remains visible.
+The Markdown syntax remains visible except for task-list checkbox markers, which appear as clickable checkboxes.
 
-Notes are Markdown source editors, not rendered Markdown or WYSIWYG editors. Highlighting may use semantic color and font traits, but must never conceal syntax or change the underlying source. Copy and paste preserve literal Markdown. Links remain editable as source; a deliberate Command-click may open a recognized URL.
+Notes are Markdown source editors, not rendered Markdown or WYSIWYG editors. Highlighting may use semantic color and font traits, but must never conceal syntax or change the underlying source except for task-list checkbox markers. A click on a checkbox toggles the corresponding Markdown marker between `[ ]` and `[x]`; the stored text and copy and paste remain literal Markdown. Links remain editable as source; a deliberate Command-click may open a recognized URL.
 
 Example:
 
@@ -449,6 +449,8 @@ At minimum, syntax highlighting should support:
 - inline code,
 - fenced code blocks,
 - blockquotes.
+
+Task-list markers in unordered and ordered lists appear as clickable checkboxes while their Markdown source remains editable and preserved.
 
 The purpose of highlighting is readability, not rendering.
 
@@ -1161,6 +1163,7 @@ A reviewer should explicitly verify all of the following.
 - [ ] Notes support one optional category.
 - [ ] Markdown remains raw editable text.
 - [ ] Syntax highlighting exists.
+- [ ] Markdown task-list markers appear as clickable checkboxes and retain literal Markdown source.
 - [ ] Notes auto-save.
 - [ ] The Note title, category picker, and delete action share a compact header above the editor.
 - [ ] Notes can be deleted.
