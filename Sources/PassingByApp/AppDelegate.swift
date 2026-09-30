@@ -638,6 +638,11 @@ private struct DashboardView: View {
                                     Text(item.title).font(.system(size: 16))
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
+                                DescriptionInfoButton(description: item.itemDescription, isPresented: Binding(
+                                    get: { state.describingAppointmentID == item.id },
+                                    set: { state.describingAppointmentID = $0 ? item.id : nil }
+                                ))
+                                .padding(.top, 2)
                             }
                             .padding(.vertical, 11)
                             Divider()
