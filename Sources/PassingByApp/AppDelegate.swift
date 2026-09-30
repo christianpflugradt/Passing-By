@@ -36,6 +36,7 @@ private enum Destination: Hashable {
     @Published var editingTaskID: UUID?
     @Published var describingTaskID: UUID?
     @Published var editingAppointmentID: UUID?
+    @Published var describingAppointmentID: UUID?
     @Published var deletingAppointmentID: UUID?
     @Published var confirmNoteDeletion = false
     @Published var showReorderNotes = false
@@ -692,14 +693,10 @@ private struct TasksView: View {
                                     .foregroundStyle(task.completedAt == nil ? .primary : .secondary)
                                     .strikethrough(task.completedAt != nil)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                if !task.taskDescription.isEmpty {
-                                    Button { state.describingTaskID = task.id } label: { Image(systemName: AppSymbol.details) }
-                                        .buttonStyle(.plain).foregroundStyle(.secondary)
-                                        .help(task.taskDescription)
-                                        .popover(isPresented: Binding(get: { state.describingTaskID == task.id }, set: { if !$0 { state.describingTaskID = nil } })) {
-                                            Text(task.taskDescription).frame(minWidth: 220, maxWidth: 360, alignment: .leading).padding(16)
-                                        }
-                                }
+                                DescriptionInfoButton(description: task.taskDescription, isPresented: Binding(
+                                    get: { state.describingTaskID == task.id },
+                                    set: { state.describingTaskID = $0 ? task.id : nil }
+                                ))
                                 Menu {
                                     Button("Edit") { state.editingTaskID = task.id }
                                     Button("Delete", role: .destructive) { state.change { $0.tasks.removeAll { $0.id == task.id } } }
@@ -722,6 +719,22 @@ private struct TasksView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .sheet(isPresented: Binding(get: { state.editingTaskID != nil }, set: { if !$0 { state.editingTaskID = nil } })) {
             if let id = state.editingTaskID { TaskEditor(state: state, id: id) }
+        }
+    }
+}
+
+private struct DescriptionInfoButton: View {
+    let description: String
+    @Binding var isPresented: Bool
+
+    var body: some View {
+        if !description.isEmpty {
+            Button { isPresented = true } label: { Image(systemName: AppSymbol.details) }
+                .buttonStyle(.plain).foregroundStyle(.secondary)
+                .help(description)
+                .popover(isPresented: $isPresented) {
+                    Text(description).frame(minWidth: 220, maxWidth: 360, alignment: .leading).padding(16)
+                }
         }
     }
 }
@@ -818,6 +831,10 @@ private struct AppointmentsView: View {
             }
             .foregroundStyle(state.workspace.isPassed(item) ? .secondary : .primary)
             .frame(maxWidth: .infinity, alignment: .leading)
+            DescriptionInfoButton(description: item.itemDescription, isPresented: Binding(
+                get: { state.describingAppointmentID == item.id },
+                set: { state.describingAppointmentID = $0 ? item.id : nil }
+            ))
             Button { state.editingAppointmentID = item.id } label: { Image(systemName: AppSymbol.edit) }
                 .buttonStyle(.plain).foregroundStyle(.secondary).help("Edit Appointment")
             Button { state.deletingAppointmentID = item.id } label: { Image(systemName: AppSymbol.delete) }

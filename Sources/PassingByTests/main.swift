@@ -329,6 +329,7 @@ func testTSVImportAndAtomicPersistence() throws {
     expect(store.workspace.dates.isEmpty && afterInvalid.dates.isEmpty, "complete validation precedes mutation")
     try store.importAppointments(parsed, categoryID: category.id)
     expect(store.workspace.dates.count == 3 && store.workspace.dates.allSatisfy { $0.labelID == category.id }, "one selected Category applies to the batch")
+    expect(store.workspace.dates.map(\.itemDescription) == ["18 km easy", "", ""], "imported descriptions remain available on Appointments")
     let afterImport = try persistence.load()
     expect(afterImport.dates == store.workspace.dates, "import survives persistence round trip")
     try store.importAppointments(parsed, categoryID: nil)
