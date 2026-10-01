@@ -732,13 +732,29 @@ private struct DescriptionInfoButton: View {
     let description: String
     @Binding var isPresented: Bool
 
+    private var popoverHeight: CGFloat {
+        let text = NSAttributedString(string: description, attributes: [.font: NSFont.systemFont(ofSize: NSFont.systemFontSize)])
+        let textHeight = text.boundingRect(
+            with: NSSize(width: 328, height: CGFloat.greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading]
+        ).height
+        return min(max(52, ceil(textHeight) + 32), 400)
+    }
+
     var body: some View {
         if !description.isEmpty {
             Button { isPresented = true } label: { Image(systemName: AppSymbol.details) }
                 .buttonStyle(.plain).foregroundStyle(.secondary)
-                .help(description)
+                .help("Show description")
                 .popover(isPresented: $isPresented) {
-                    Text(description).frame(minWidth: 220, maxWidth: 360, alignment: .leading).padding(16)
+                    ScrollView {
+                        Text(description)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(16)
+                    }
+                    .frame(width: 360, height: popoverHeight)
                 }
         }
     }
