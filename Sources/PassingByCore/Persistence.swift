@@ -144,6 +144,7 @@ public final class AppStore {
         if workspace.statisticsStartedAt == nil { workspace.statisticsStartedAt = Date() }
         workspace.purgeExpired()
         if workspace != old { save() }
+        evaluateScheduledTodos()
     }
 
     public func change(_ mutation: (inout Workspace) -> Void) {
@@ -173,6 +174,21 @@ public final class AppStore {
         let old = workspace
         workspace.purgeExpired()
         if save && old != workspace { self.save() }
+    }
+
+    @discardableResult public func evaluateScheduledTodos(at now: Date = Date(), calendar: Calendar = .current) -> Int {
+        var candidate = workspace
+        let created = candidate.evaluateScheduledTodos(at: now, calendar: calendar)
+        guard candidate != workspace else { return 0 }
+        do { try persistence.save(candidate) }
+        catch {
+            persistenceError = error.localizedDescription
+            onPersistenceError?(error.localizedDescription)
+            return 0
+        }
+        workspace = candidate
+        persistenceError = nil
+        return created
     }
 
     @discardableResult public func flush() -> Bool {

@@ -221,6 +221,7 @@ public struct Workspace: Codable, Equatable {
     public var labels: [Label] = []
     public var notes: [Note] = []
     public var tasks: [Task] = []
+    public var scheduledTodos: [ScheduledTodo] = []
     public var dates: [DateItem] = []
     public var settings = AppSettings()
     public var statisticsStartedAt: Date?
@@ -229,19 +230,20 @@ public struct Workspace: Codable, Equatable {
     // Version 1 stores the user-defined order directly in `notes`. Older files
     // displayed Notes by creation time, regardless of their array order.
     private var noteOrderVersion = 1
-    public init(labels: [Label] = [], notes: [Note] = [], tasks: [Task] = [], dates: [DateItem] = [], settings: AppSettings = AppSettings(), statisticsStartedAt: Date? = nil, historicalCompletedTodoCount: Int = 0, historicalPassedAppointmentCount: Int = 0) {
-        self.labels = labels; self.notes = notes; self.tasks = tasks; self.dates = dates; self.settings = settings
+    public init(labels: [Label] = [], notes: [Note] = [], tasks: [Task] = [], scheduledTodos: [ScheduledTodo] = [], dates: [DateItem] = [], settings: AppSettings = AppSettings(), statisticsStartedAt: Date? = nil, historicalCompletedTodoCount: Int = 0, historicalPassedAppointmentCount: Int = 0) {
+        self.labels = labels; self.notes = notes; self.tasks = tasks; self.scheduledTodos = scheduledTodos; self.dates = dates; self.settings = settings
         self.statisticsStartedAt = statisticsStartedAt
         self.historicalCompletedTodoCount = historicalCompletedTodoCount
         self.historicalPassedAppointmentCount = historicalPassedAppointmentCount
     }
 
-    private enum CodingKeys: String, CodingKey { case labels, notes, tasks, dates, settings, noteOrderVersion, statisticsStartedAt, historicalCompletedTodoCount, historicalPassedAppointmentCount }
+    private enum CodingKeys: String, CodingKey { case labels, notes, tasks, scheduledTodos, dates, settings, noteOrderVersion, statisticsStartedAt, historicalCompletedTodoCount, historicalPassedAppointmentCount }
     public init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         labels = try values.decode([Label].self, forKey: .labels)
         notes = try values.decode([Note].self, forKey: .notes)
         tasks = try values.decode([Task].self, forKey: .tasks)
+        scheduledTodos = try values.decodeIfPresent([ScheduledTodo].self, forKey: .scheduledTodos) ?? []
         dates = try values.decode([DateItem].self, forKey: .dates)
         settings = try values.decode(AppSettings.self, forKey: .settings)
         statisticsStartedAt = try values.decodeIfPresent(Date.self, forKey: .statisticsStartedAt)
@@ -267,6 +269,7 @@ public struct Workspace: Codable, Equatable {
         labels.removeAll { $0.id == id }
         notes.indices.forEach { if notes[$0].labelID == id { notes[$0].labelID = nil } }
         tasks.indices.forEach { if tasks[$0].labelID == id { tasks[$0].labelID = nil } }
+        scheduledTodos.indices.forEach { if scheduledTodos[$0].categoryID == id { scheduledTodos[$0].categoryID = nil } }
         dates.indices.forEach { if dates[$0].labelID == id { dates[$0].labelID = nil } }
         if settings.labelContext == .label(id) { settings.labelContext = .all }
         if settings.defaultLabelID == id { settings.defaultLabelID = nil }
@@ -283,6 +286,28 @@ public struct Workspace: Codable, Equatable {
         let task = Task(title: "New To-do", labelID: settings.resolvedDefaultLabelID(at: now, calendar: calendar, validLabels: labels), createdAt: now)
         tasks.append(task)
         return task
+    }
+
+    @discardableResult public mutating func evaluateScheduledTodos(at now: Date = Date(), calendar: Calendar = .current) -> Int {
+        let today = calendar.startOfDay(for: now)
+        var created = 0
+        for index in scheduledTodos.indices {
+            var occurrence = calendar.startOfDay(for: scheduledTodos[index].nextOccurrence)
+            guard occurrence <= today else { continue }
+            var latestDue = occurrence
+            repeat {
+                latestDue = occurrence
+                occurrence = scheduledTodos[index].recurrence.occurrence(after: occurrence, calendar: calendar)
+            } while occurrence <= today
+            scheduledTodos[index].nextOccurrence = occurrence
+            guard scheduledTodos[index].lastGeneratedOccurrence != latestDue else { continue }
+            let schedule = scheduledTodos[index]
+            let categoryID = labels.contains { $0.id == schedule.categoryID } ? schedule.categoryID : nil
+            tasks.append(Task(title: schedule.title, labelID: categoryID, createdAt: now))
+            scheduledTodos[index].lastGeneratedOccurrence = latestDue
+            created += 1
+        }
+        return created
     }
 
     public mutating func createAppointment(at now: Date = Date(), calendar: Calendar = .current) -> DateItem {

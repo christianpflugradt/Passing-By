@@ -149,6 +149,7 @@ private enum Destination: Hashable {
             lockNow()
         }
         cancelPendingLock()
+        refresh()
     }
     private func scheduleInactiveLock() {
         lockTimer?.invalidate()
@@ -184,7 +185,13 @@ private enum Destination: Hashable {
         }
         _ = store.flush(); error = store.persistenceError
     }
-    func refresh() { store.cleanUp(); workspace = store.workspace; error = store.persistenceError; reconcile() }
+    func refresh() {
+        store.cleanUp()
+        store.evaluateScheduledTodos()
+        workspace = store.workspace
+        error = store.persistenceError
+        reconcile()
+    }
     func refreshIfDayChanged() {
         let today = Calendar.current.startOfDay(for: Date())
         if today != currentDay { currentDay = today; refresh() }
@@ -1151,6 +1158,7 @@ private struct SettingsView: View {
                     Picker("Keep completed To-dos", selection: setting(\.taskRetention)) {
                         ForEach(RetentionPeriod.allCases) { period in Text(period.title).tag(period) }
                     }
+                    ScheduledTodoSettings(state: state)
                 }
                 VStack(alignment: .leading, spacing: 12) {
                     sectionHeading("Appointments")
@@ -1238,6 +1246,174 @@ private struct SettingsView: View {
             let parts = Calendar.current.dateComponents([.hour, .minute], from: date)
             state.change { $0.settings[keyPath: keyPath] = (parts.hour ?? 0) * 60 + (parts.minute ?? 0) }
         })
+    }
+}
+
+private enum ScheduledTodoKind: String, CaseIterable { case weekly = "Weekly", monthly = "Monthly" }
+private enum ScheduledTodoCategoryChoice: Hashable { case unselected, uncategorized, category(UUID) }
+
+@MainActor private final class ScheduledTodoDraft: ObservableObject {
+    @Published var showingForm = false
+    @Published var title = ""
+    @Published var kind: ScheduledTodoKind = .weekly
+    @Published var interval: ScheduleWeekInterval = .everyWeek
+    @Published var weekday: ScheduleWeekday?
+    @Published var monthOccurrence: ScheduleMonthOccurrence?
+    @Published var category: ScheduledTodoCategoryChoice = .unselected
+    @Published var infoID: UUID?
+    @Published var deleteID: UUID?
+}
+
+private struct ScheduledTodoSettings: View {
+
+    @ObservedObject var state: WorkspaceState
+    @StateObject private var draft = ScheduledTodoDraft()
+
+    private let weekdays: [ScheduleWeekday] = [.monday, .tuesday, .wednesday, .thursday, .friday, .saturday, .sunday]
+    private var canCreate: Bool {
+        guard !draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+        switch draft.category {
+        case .unselected: return false
+        case .category(let id) where !state.workspace.labels.contains(where: { $0.id == id }): return false
+        default: break
+        }
+        return draft.kind == .weekly ? draft.weekday != nil : draft.monthOccurrence != nil
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Scheduled To-dos").font(.subheadline.weight(.semibold)).padding(.top, 4)
+            ForEach(state.workspace.scheduledTodos) { schedule in
+                HStack(spacing: 10) {
+                    Text(schedule.title).frame(maxWidth: .infinity, alignment: .leading)
+                    Button { draft.infoID = schedule.id } label: { Image(systemName: AppSymbol.details) }
+                        .buttonStyle(.plain).foregroundStyle(.secondary).help("Schedule details")
+                        .accessibilityLabel("Details for \(schedule.title)")
+                        .popover(isPresented: Binding(get: { draft.infoID == schedule.id }, set: { if !$0 { draft.infoID = nil } })) {
+                            scheduleInfo(schedule).padding(16).frame(width: 260, alignment: .leading)
+                        }
+                    Button { draft.deleteID = schedule.id } label: { Image(systemName: AppSymbol.delete) }
+                        .buttonStyle(.plain).foregroundStyle(.secondary).help("Delete schedule")
+                        .accessibilityLabel("Delete schedule for \(schedule.title)")
+                }
+                .padding(.vertical, 4)
+                Divider()
+            }
+            if draft.showingForm {
+                VStack(alignment: .leading, spacing: 10) {
+                    TextField("To-do title", text: $draft.title)
+                    Picker("Category", selection: $draft.category) {
+                        Text("Choose Category…").tag(ScheduledTodoCategoryChoice.unselected)
+                        Text("Uncategorized").tag(ScheduledTodoCategoryChoice.uncategorized)
+                        ForEach(state.workspace.labels) { label in Text(label.name).tag(ScheduledTodoCategoryChoice.category(label.id)) }
+                    }
+                    Picker("Schedule", selection: $draft.kind) {
+                        ForEach(ScheduledTodoKind.allCases, id: \.self) { value in Text(value.rawValue).tag(value) }
+                    }
+                    if draft.kind == .weekly {
+                        Picker("Interval", selection: $draft.interval) {
+                            Text("Every week").tag(ScheduleWeekInterval.everyWeek)
+                            Text("Every 2 weeks").tag(ScheduleWeekInterval.everyTwoWeeks)
+                        }
+                        Picker("Weekday", selection: $draft.weekday) {
+                            Text("Choose weekday…").tag(ScheduleWeekday?.none)
+                            ForEach(weekdays) { day in Text(day.name).tag(Optional(day)) }
+                        }
+                    } else {
+                        Picker("Occurrence", selection: $draft.monthOccurrence) {
+                            Text("Choose occurrence…").tag(ScheduleMonthOccurrence?.none)
+                            ForEach(ScheduleMonthOccurrence.allCases) { choice in Text(choice.name).tag(Optional(choice)) }
+                        }
+                    }
+                    HStack {
+                        Button("Create Schedule") { create() }.disabled(!canCreate)
+                        Button("Cancel") { resetForm() }
+                    }
+                }
+                .frame(maxWidth: 420, alignment: .leading)
+            } else {
+                Button("Add Scheduled To-do") { draft.showingForm = true }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .confirmationDialog("Delete Scheduled To-do?", isPresented: Binding(get: { draft.deleteID != nil }, set: { if !$0 { draft.deleteID = nil } })) {
+            Button("Delete Schedule", role: .destructive) {
+                if let deleteID = draft.deleteID { state.change { $0.scheduledTodos.removeAll { $0.id == deleteID } } }
+                draft.deleteID = nil
+            }
+        } message: { Text("To-dos already created by this schedule will remain.") }
+    }
+
+    private func scheduleInfo(_ schedule: ScheduledTodo) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(schedule.title).font(.headline)
+            Text("Category: \(state.workspace.labels.first { $0.id == schedule.categoryID }?.name ?? "Uncategorized")")
+            switch schedule.recurrence {
+            case .weekly(let interval, let weekday):
+                Text("Type: Weekly")
+                Text("Interval: \(interval == .everyWeek ? "Every week" : "Every 2 weeks")")
+                Text("Weekday: \(weekday.name)")
+            case .monthly(let occurrence):
+                Text("Type: Monthly")
+                Text("Occurrence: \(occurrence.name)")
+            }
+            Text("Next: \(schedule.nextOccurrence.formatted(date: .abbreviated, time: .omitted))")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func create() {
+        guard canCreate else { return }
+        let recurrence: ScheduleRecurrence
+        switch draft.kind {
+        case .weekly: recurrence = .weekly(interval: draft.interval, weekday: draft.weekday!)
+        case .monthly: recurrence = .monthly(draft.monthOccurrence!)
+        }
+        let categoryID: UUID?
+        switch draft.category {
+        case .category(let id): categoryID = id
+        case .uncategorized: categoryID = nil
+        case .unselected: return
+        }
+        let schedule = ScheduledTodo(title: draft.title.trimmingCharacters(in: .whitespacesAndNewlines), categoryID: categoryID, recurrence: recurrence)
+        state.change { $0.scheduledTodos.append(schedule) }
+        state.refresh()
+        resetForm()
+    }
+
+    private func resetForm() {
+        draft.showingForm = false
+        draft.title = ""
+        draft.kind = .weekly
+        draft.interval = .everyWeek
+        draft.weekday = nil
+        draft.monthOccurrence = nil
+        draft.category = .unselected
+    }
+}
+
+private extension ScheduleWeekday {
+    var name: String {
+        switch self {
+        case .monday: "Monday"
+        case .tuesday: "Tuesday"
+        case .wednesday: "Wednesday"
+        case .thursday: "Thursday"
+        case .friday: "Friday"
+        case .saturday: "Saturday"
+        case .sunday: "Sunday"
+        }
+    }
+}
+
+private extension ScheduleMonthOccurrence {
+    var name: String {
+        switch self {
+        case .firstDay: "First day of month"
+        case .firstWeekday: "First weekday of month"
+        case .lastDay: "Last day of month"
+        case .lastWeekday: "Last weekday of month"
+        }
     }
 }
 

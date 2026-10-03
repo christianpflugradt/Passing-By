@@ -852,6 +852,10 @@ The override is resolved only when a new item is created, using the current loca
 
 Users can configure completed To-do retention.
 
+Scheduled To-dos are managed only here. A schedule has a static To-do title, one selected Category or an explicit Uncategorized choice, a weekly or monthly recurrence, and a persisted next occurrence. Weekly choices are every week or every two weeks on one selected weekday; the first occurrence anchors the two-week cadence. Monthly choices are the first day, first weekday, last day, or last weekday of the month, where weekday means Monday through Friday. Schedules can be created, viewed, and deleted, but not edited or paused. The list identifies schedules by title and provides a compact read-only view of their configuration and next occurrence.
+
+When a schedule is due, the app creates one ordinary To-do with its saved title and Category; the Default Category is not used. If several occurrences were missed, it creates only the most recent due one and advances the next occurrence to the first future date. Evaluation on launch and while the app remains open is idempotent across repeated checks and restarts. Earlier generated To-dos do not affect future generation; deleting a schedule leaves them untouched. Deleting a Category changes schedules that selected it to Uncategorized, consistent with existing item references.
+
 ## 21.4 Appointments
 
 Users can configure passed Appointment retention, the global maximum upcoming Appointments per Category, and the future time horizon. This section also provides a simple TSV bulk import.
@@ -1039,7 +1043,7 @@ Version 1 must not implement:
 - to-do priorities
 - to-do due dates
 - subtasks
-- recurring To-dos
+- recurrence on individual To-dos
 - recurring Appointments
 - structured event times
 - event duration
@@ -1177,6 +1181,7 @@ A reviewer should explicitly verify all of the following.
 - [ ] Completed To-dos can be restored.
 - [ ] Completed To-do retention is configurable.
 - [ ] Open To-dos are never deleted by retention.
+- [ ] Settings can create, inspect, and delete weekly or monthly Scheduled To-dos with an explicit Category choice; generated To-dos are ordinary items, missed occurrences create only the latest due item, and repeated evaluation does not duplicate it.
 
 ## Appointments
 

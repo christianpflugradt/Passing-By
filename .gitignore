@@ -6,6 +6,7 @@
 .build/
 /build/
 /DerivedData/
+/.idea/
 *.xcuserstate
 xcuserdata/
 *.xccheckout
